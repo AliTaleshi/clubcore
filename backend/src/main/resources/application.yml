@@ -16,6 +16,8 @@ spring:
     enabled: true
   jackson:
     time-zone: Asia/Tehran
+    deserialization:
+      fail-on-null-for-primitives: false
 
 server:
   port: 8080
