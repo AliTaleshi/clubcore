@@ -1,0 +1,56 @@
+name: clubcore
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-clubcore}
+      POSTGRES_USER: ${POSTGRES_USER:-clubcore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clubcore}
+      TZ: Asia/Tehran
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-clubcore}
+      DB_USER: ${POSTGRES_USER:-clubcore}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-clubcore}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (copy .env.example to .env)}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+      ADMIN_PHONE: ${ADMIN_PHONE:-09120000000}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      SEED_DEMO: ${SEED_DEMO:-false}
+      ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID:-00000000-0000-0000-0000-000000000000}
+      ZARINPAL_SANDBOX: ${ZARINPAL_SANDBOX:-true}
+      ZIBAL_MERCHANT: ${ZIBAL_MERCHANT:-zibal}
+      SMS_PROVIDER: ${SMS_PROVIDER:-mock}
+      KAVENEGAR_API_KEY: ${KAVENEGAR_API_KEY:-}
+      KAVENEGAR_SENDER: ${KAVENEGAR_SENDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-opus-5}
+    expose:
+      - "8080"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-3000}:80"
+
+volumes:
+  db-data:

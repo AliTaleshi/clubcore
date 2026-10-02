@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "java",
+      "runtimeArgs": ["-jar", "backend/target/clubcore-0.0.1-SNAPSHOT.jar", "--server.port=8080",
+        "--spring.datasource.url=jdbc:postgresql://localhost:55432/clubcore",
+        "--app.public-url=http://localhost:5173", "--app.bootstrap.seed-demo=true"],
+      "port": 8080
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 5173
+    }
+  ]
+}
