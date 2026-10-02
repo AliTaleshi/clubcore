@@ -8,7 +8,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContai
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { Dashboard } from '../../api/types';
-import { ChartBox, Empty, Loading, PageHeader, StatCard } from '../../components/common';
+import { ChartBox, Empty, Loading, PageHeader, StatCard, useChartColors } from '../../components/common';
 import { faDigits, formatDate, formatMoney, formatNumber } from '../../utils/format';
 import { format, parseISO } from 'date-fns-jalali';
 
@@ -22,6 +22,7 @@ const shortDate = (iso: string) => faDigits(format(parseISO(iso), 'MM/dd'));
 const compact = (n: number) => (n >= 1_000_000 ? `${faDigits(Math.round(n / 1_000_000))}م` : faDigits(n));
 
 export default function DashboardPage() {
+  const colors = useChartColors();
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => api.get<Dashboard>('/dashboard').then((r) => r.data),
@@ -54,7 +55,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="date" tickFormatter={shortDate} fontSize={11} />
                   <YAxis allowDecimals={false} tickFormatter={(v) => faDigits(v)} fontSize={11} width={30} />
                   <Tooltip labelFormatter={(l) => formatDate(String(l))} formatter={(v) => [faDigits(Number(v)), 'مراجعه']} />
-                  <Area type="monotone" dataKey="count" stroke="#0f766e" fill="#0f766e" fillOpacity={0.2} />
+                  <Area type="monotone" dataKey="count" stroke={colors.primary} fill={colors.primary} fillOpacity={0.2} />
                 </AreaChart>
               </ResponsiveContainer>
             </ChartBox>
@@ -69,7 +70,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="hour" tickFormatter={(h) => faDigits(h)} fontSize={11} />
                   <YAxis hide />
                   <Tooltip labelFormatter={(h) => `ساعت ${faDigits(Number(h))}`} formatter={(v) => [faDigits(Number(v)), 'مراجعه']} />
-                  <Bar dataKey="count" fill="#c2410c" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill={colors.accent} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartBox>
@@ -86,8 +87,8 @@ export default function DashboardPage() {
                   <YAxis tickFormatter={compact} fontSize={11} width={40} />
                   <Tooltip labelFormatter={(l) => formatDate(String(l))} formatter={(v, n) => [formatMoney(Number(v)), n === 'income' ? 'درآمد' : 'هزینه']} />
                   <Legend formatter={(v) => (v === 'income' ? 'درآمد' : 'هزینه')} />
-                  <Bar dataKey="income" fill="#0f766e" />
-                  <Bar dataKey="expense" fill="#dc2626" />
+                  <Bar dataKey="income" fill={colors.income} />
+                  <Bar dataKey="expense" fill={colors.expense} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartBox>

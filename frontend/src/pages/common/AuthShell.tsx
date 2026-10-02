@@ -11,7 +11,7 @@ export function AuthShell({ title, children }: { title: string; children: ReactN
   });
   return (
     <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', p: 2,
-      background: 'linear-gradient(135deg, rgba(15,118,110,.12), rgba(194,65,12,.08))' }}>
+      background: 'linear-gradient(135deg, rgba(79,70,229,.16), rgba(245,158,11,.10))' }}>
       <Card sx={{ width: '100%', maxWidth: 420 }}>
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
           <Stack alignItems="center" spacing={1} sx={{ mb: 3 }}>

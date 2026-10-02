@@ -10,7 +10,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage } from '../../api/client';
 import type { Account, Expense, IncomeStatement, JournalEntry, LedgerRow, Page, SeriesPoint, TrialRow } from '../../api/types';
-import { ChartBox, Empty, Loading, PageHeader, StatCard } from '../../components/common';
+import { ChartBox, Empty, Loading, PageHeader, StatCard, useChartColors } from '../../components/common';
 import { JalaliDateField } from '../../components/JalaliDateField';
 import { useNotify } from '../../components/Notify';
 import { faDigits, formatDate, formatMoney, jalaliMonthKey, latinDigits, toIsoDate } from '../../utils/format';
@@ -49,6 +49,7 @@ export default function AccountingPage() {
 }
 
 function Reports({ from, to }: { from: string; to: string }) {
+  const colors = useChartColors();
   const is = useQuery({ queryKey: ['income-statement', from, to],
     queryFn: () => api.get<IncomeStatement>('/accounting/reports/income-statement', { params: { from, to } }).then((r) => r.data) });
   const series = useQuery({ queryKey: ['series', from, to],
@@ -87,8 +88,8 @@ function Reports({ from, to }: { from: string; to: string }) {
                 <YAxis tickFormatter={compact} fontSize={11} width={45} />
                 <Tooltip labelFormatter={(m) => faDigits(String(m))} formatter={(v, n) => [formatMoney(Number(v)), n === 'income' ? 'درآمد' : 'هزینه']} />
                 <Legend formatter={(v) => (v === 'income' ? 'درآمد' : 'هزینه')} />
-                <Bar dataKey="income" fill="#0f766e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expense" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" fill={colors.income} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expense" fill={colors.expense} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>

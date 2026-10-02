@@ -8,15 +8,33 @@ export const rtlCache = createCache({ key: 'muirtl', stylisPlugins: [prefixer, r
 
 const font = '"Vazirmatn", "Tahoma", sans-serif';
 
+/** Brand palette: indigo primary with an amber accent. */
+export const brand = {
+  indigo: '#4f46e5',
+  indigoLight: '#818cf8',
+  amber: '#f59e0b',
+  rose: '#f43f5e',
+};
+
+/** Chart colors per mode; income uses the brand color, expense stays a warm red so the meaning is obvious. */
+export function chartColors(mode: 'light' | 'dark') {
+  return {
+    primary: mode === 'light' ? brand.indigo : brand.indigoLight,
+    accent: brand.amber,
+    income: mode === 'light' ? brand.indigo : brand.indigoLight,
+    expense: brand.rose,
+  };
+}
+
 export function buildTheme(mode: 'light' | 'dark') {
   return createTheme(
     {
       direction: 'rtl',
       palette: {
         mode,
-        primary: { main: '#0f766e' },
-        secondary: { main: '#c2410c' },
-        background: mode === 'light' ? { default: '#f4f6f8', paper: '#ffffff' } : { default: '#0b1215', paper: '#131c20' },
+        primary: { main: mode === 'light' ? brand.indigo : brand.indigoLight },
+        secondary: { main: brand.amber, contrastText: '#1f1300' },
+        background: mode === 'light' ? { default: '#f5f6fb', paper: '#ffffff' } : { default: '#0d0f1c', paper: '#151829' },
       },
       shape: { borderRadius: 12 },
       typography: {

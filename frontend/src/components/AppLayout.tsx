@@ -137,7 +137,7 @@ export function AppLayout() {
             </IconButton>
           </Tooltip>
           <IconButton onClick={(e) => setAnchor(e.currentTarget)} aria-label="حساب کاربری">
-            <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main', fontSize: 14 }}>{user.fullName.charAt(0)}</Avatar>
+            <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: 'secondary.contrastText', fontSize: 14, fontWeight: 700 }}>{user.fullName.charAt(0)}</Avatar>
           </IconButton>
           <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
             <Box sx={{ px: 2, py: 1 }}>

@@ -16,6 +16,8 @@ import {
 } from '@mui/material';
 import InboxOutlined from '@mui/icons-material/InboxOutlined';
 import ReactMarkdown from 'react-markdown';
+import { useTheme } from '@mui/material/styles';
+import { chartColors } from '../theme';
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
@@ -97,6 +99,10 @@ export function Markdown({ children }: { children: string }) {
       <ReactMarkdown>{children}</ReactMarkdown>
     </Box>
   );
+}
+
+export function useChartColors() {
+  return chartColors(useTheme().palette.mode);
 }
 
 /** Recharts is laid out LTR so axes render correctly; labels stay Persian. */
