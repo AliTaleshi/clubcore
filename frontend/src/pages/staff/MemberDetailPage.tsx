@@ -12,7 +12,7 @@ import type { Attendance, CrmActivity, Invoice, LoyaltySummary, LoyaltyTx, Membe
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, Empty, Loading, Markdown, PageHeader, StatCard, StatusChip } from '../../components/common';
 import { useNotify } from '../../components/Notify';
-import { faDigits, formatDate, formatDateTime, formatMoney, formatNumber, formatTime } from '../../utils/format';
+import { faDigits, formatDate, formatDateTime, formatMoney, formatNumber, formatTime, parseAmount } from '../../utils/format';
 import { activityType, entryMethod, gender, invoiceStatus, loyaltyReason, membershipStatus } from '../../utils/labels';
 import { ProgramGeneratorDialog } from '../coach/ProgramGeneratorDialog';
 import { MemberFormDialog } from './MemberFormDialog';
@@ -266,7 +266,7 @@ function LoyaltyTab({ memberId }: { memberId: number }) {
     queryFn: () => api.get<{ summary: LoyaltySummary; history: LoyaltyTx[] }>(`/loyalty/members/${memberId}`).then((r) => r.data),
   });
   const adjust = useMutation({
-    mutationFn: () => api.post('/loyalty/adjust', { memberId, points: Number(points), note }),
+    mutationFn: () => api.post('/loyalty/adjust', { memberId, points: parseAmount(points, { allowNegative: true }), note }),
     onSuccess: () => { notify('امتیاز ثبت شد'); setPoints(''); setNote(''); qc.invalidateQueries({ queryKey: ['loyalty', memberId] }); },
     onError: (e) => notify(errorMessage(e), 'error'),
   });
@@ -283,7 +283,7 @@ function LoyaltyTab({ memberId }: { memberId: number }) {
               <Stack spacing={1.5}>
                 <TextField label="امتیاز (+/−)" value={points} onChange={(e) => setPoints(e.target.value)} inputProps={{ dir: 'ltr' }} />
                 <TextField label="توضیح" value={note} onChange={(e) => setNote(e.target.value)} />
-                <Button variant="contained" onClick={() => adjust.mutate()} disabled={!points || !note || Number.isNaN(Number(points))}>ثبت</Button>
+                <Button variant="contained" onClick={() => adjust.mutate()} disabled={!note.trim() || !parseAmount(points, { allowNegative: true })}>ثبت</Button>
               </Stack>
             </CardContent></Card>
           )}
@@ -354,13 +354,14 @@ function ProgramsTab({ memberId, goal }: { memberId: number; goal: string }) {
   const qc = useQueryClient();
   const notify = useNotify();
   const [open, setOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<WorkoutProgram | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['programs', memberId],
     queryFn: () => api.get<WorkoutProgram[]>(`/members/${memberId}/programs`).then((r) => r.data),
   });
   const del = useMutation({
     mutationFn: (id: number) => api.delete(`/programs/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['programs', memberId] }),
+    onSuccess: () => { setToDelete(null); qc.invalidateQueries({ queryKey: ['programs', memberId] }); },
     onError: (e) => notify(errorMessage(e), 'error'),
   });
   return (
@@ -373,12 +374,15 @@ function ProgramsTab({ memberId, goal }: { memberId: number; goal: string }) {
           </AccordionSummary>
           <AccordionDetails>
             <Markdown>{p.content}</Markdown>
-            <IconButton color="error" onClick={() => del.mutate(p.id)} aria-label="حذف برنامه"><DeleteOutline /></IconButton>
+            <IconButton color="error" onClick={() => setToDelete(p)} aria-label="حذف برنامه"><DeleteOutline /></IconButton>
           </AccordionDetails>
         </Accordion>
       ))}
       <ProgramGeneratorDialog open={open} onClose={() => setOpen(false)} memberId={memberId} defaultGoal={goal}
         onSaved={() => qc.invalidateQueries({ queryKey: ['programs', memberId] })} />
+      <ConfirmDialog open={!!toDelete} title="حذف برنامه تمرینی" text={`برنامه «${toDelete?.title ?? ''}» حذف شود؟`}
+        confirmText="حذف" color="error" loading={del.isPending} onClose={() => setToDelete(null)}
+        onConfirm={() => toDelete && del.mutate(toDelete.id)} />
     </>
   );
 }

@@ -33,13 +33,24 @@ export function SellMembershipDialog({ open, onClose, memberId, onDone }: {
   const sell = useMutation({
     mutationFn: async () => {
       const { data } = await api.post<PurchaseResult>('/memberships', { memberId, planId, startDate: start, discountCode: applied || null });
-      if (!data.paid && method !== 'LATER') await api.post(`/invoices/${data.invoiceId}/pay`, { method });
-      return data;
+      if (!data.paid && method !== 'LATER') {
+        try {
+          await api.post(`/invoices/${data.invoiceId}/pay`, { method });
+        } catch (e) {
+          // The membership and invoice exist now; retrying the sale would be refused as a duplicate pending purchase.
+          return { ...data, payError: errorMessage(e) };
+        }
+      }
+      return { ...data, payError: null as string | null };
     },
-    onSuccess: () => {
-      notify(method === 'LATER' ? 'اشتراک ثبت شد و فاکتور در انتظار پرداخت است' : 'اشتراک فروخته و فعال شد');
+    onSuccess: (res) => {
       onDone();
       onClose();
+      if (res.payError) {
+        notify(`اشتراک ثبت شد اما پرداخت ثبت نشد (${res.payError}). پرداخت را از تب «فاکتورها» ثبت کنید.`, 'warning');
+      } else {
+        notify(method === 'LATER' && !res.paid ? 'اشتراک ثبت شد و فاکتور در انتظار پرداخت است' : 'اشتراک فروخته و فعال شد');
+      }
     },
     onError: (e) => setError(errorMessage(e)),
   });

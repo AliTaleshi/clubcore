@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Empty, Loading, PageHeader } from '../../components/common';
 import { faDigits, formatDate } from '../../utils/format';
 import { MemberFormDialog } from './MemberFormDialog';
+import { useDebounced } from '../../hooks/useDebounced';
 
 export default function MembersPage() {
   const navigate = useNavigate();
@@ -19,9 +20,10 @@ export default function MembersPage() {
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(20);
   const [open, setOpen] = useState(false);
+  const query = useDebounced(q.trim());
   const { data, isLoading } = useQuery({
-    queryKey: ['members', q, page, size],
-    queryFn: () => api.get<Page<Member>>('/members', { params: { q, page, size } }).then((r) => r.data),
+    queryKey: ['members', query, page, size],
+    queryFn: () => api.get<Page<Member>>('/members', { params: { q: query, page, size } }).then((r) => r.data),
     placeholderData: keepPreviousData,
   });
   return (
@@ -44,7 +46,9 @@ export default function MembersPage() {
                 </TableRow></TableHead>
                 <TableBody>
                   {data.content.map((m) => (
-                    <TableRow key={m.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/members/${m.id}`)}>
+                    <TableRow key={m.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/members/${m.id}`)}
+                      tabIndex={0} role="link" aria-label={`پرونده ${m.fullName}`}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/members/${m.id}`); } }}>
                       <TableCell>{faDigits(m.membershipNo)}</TableCell>
                       <TableCell>{m.fullName}</TableCell>
                       <TableCell>{faDigits(m.phone)}</TableCell>

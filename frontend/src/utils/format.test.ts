@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { faDigits, formatDate, formatMoney, formatNumber, isValidNationalCode, isValidPhone, jalaliMonthKey,
+import { faDigits, formatDate, formatMoney, formatNumber, isValidNationalCode, isValidPhone, jalaliMonthKey, parseAmount,
   latinDigits, normalizePhone, toIsoDate } from './format';
 
 describe('format utils', () => {
@@ -40,5 +40,28 @@ describe('format utils', () => {
     expect(isValidNationalCode('۰۴۹۹۳۷۰۸۹۹')).toBe(true);
     expect(isValidNationalCode('0499370898')).toBe(false);
     expect(isValidNationalCode('1111111111')).toBe(false);
+  });
+});
+
+describe('parseAmount', () => {
+  it('accepts separators, spaces and Persian digits', () => {
+    expect(parseAmount('1500000')).toBe(1500000);
+    expect(parseAmount('1,500,000')).toBe(1500000);
+    expect(parseAmount('۱٬۵۰۰٬۰۰۰')).toBe(1500000);
+    expect(parseAmount(' 1 500 000 ')).toBe(1500000);
+    expect(parseAmount('0')).toBe(0);
+  });
+
+  it('rejects anything that is not a whole number instead of returning NaN', () => {
+    expect(parseAmount('')).toBeNull();
+    expect(parseAmount('abc')).toBeNull();
+    expect(parseAmount('12.5')).toBeNull();
+    expect(parseAmount('-5')).toBeNull();
+    expect(parseAmount('99999999999999999999')).toBeNull();
+  });
+
+  it('allows negatives only when asked', () => {
+    expect(parseAmount('-50', { allowNegative: true })).toBe(-50);
+    expect(parseAmount('−۵۰', { allowNegative: true })).toBe(-50);
   });
 });

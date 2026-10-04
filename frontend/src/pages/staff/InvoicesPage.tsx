@@ -3,12 +3,12 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Button, Card, Dialog, DialogActions, DialogContent, DialogTitle, Link, MenuItem, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField } from '@mui/material';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage } from '../../api/client';
+import { api, errorMessage, requireAmount, ValidationError } from '../../api/client';
 import type { Invoice, Member, Page } from '../../api/types';
-import { Empty, Loading, PageHeader, StatusChip } from '../../components/common';
+import { ConfirmDialog, Empty, Loading, PageHeader, StatusChip } from '../../components/common';
 import { MemberPicker } from '../../components/MemberPicker';
 import { useNotify } from '../../components/Notify';
-import { faDigits, formatDate, formatMoney, latinDigits } from '../../utils/format';
+import { faDigits, formatDate, formatMoney, parseAmount } from '../../utils/format';
 import { invoiceStatus } from '../../utils/labels';
 
 export default function InvoicesPage() {
@@ -17,6 +17,7 @@ export default function InvoicesPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
   const [pay, setPay] = useState<Invoice | null>(null);
+  const [toCancel, setToCancel] = useState<Invoice | null>(null);
   const [method, setMethod] = useState('POS');
   const [create, setCreate] = useState(false);
   const [member, setMember] = useState<Member | null>(null);
@@ -35,11 +36,16 @@ export default function InvoicesPage() {
   });
   const cancel = useMutation({
     mutationFn: (id: number) => api.post(`/invoices/${id}/cancel`),
-    onSuccess: () => { notify('فاکتور لغو شد'); qc.invalidateQueries({ queryKey: ['invoices'] }); },
+    onSuccess: () => { notify('فاکتور لغو شد'); setToCancel(null); qc.invalidateQueries({ queryKey: ['invoices'] }); },
     onError: (e) => notify(errorMessage(e), 'error'),
   });
   const createMut = useMutation({
-    mutationFn: () => api.post('/invoices', { memberId: member!.id, title: form.title, amount: Number(latinDigits(form.amount)), discount: Number(latinDigits(form.discount) || 0) }),
+    mutationFn: () => {
+      const amount = requireAmount(parseAmount(form.amount), 'مبلغ', { min: 1 });
+      const discount = form.discount.trim() ? requireAmount(parseAmount(form.discount), 'تخفیف') : 0;
+      if (discount > amount) throw new ValidationError('تخفیف نمی‌تواند از مبلغ بیشتر باشد');
+      return api.post('/invoices', { memberId: member!.id, title: form.title, amount, discount });
+    },
     onSuccess: () => { notify('فاکتور صادر شد'); setCreate(false); setForm({ title: '', amount: '', discount: '0' }); setMember(null); qc.invalidateQueries({ queryKey: ['invoices'] }); },
     onError: (e) => setError(errorMessage(e)),
   });
@@ -71,7 +77,7 @@ export default function InvoicesPage() {
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         {i.status === 'UNPAID' && <>
                           <Button size="small" onClick={() => setPay(i)}>ثبت پرداخت</Button>
-                          <Button size="small" color="error" onClick={() => cancel.mutate(i.id)}>لغو</Button>
+                          <Button size="small" color="error" onClick={() => setToCancel(i)}>لغو</Button>
                         </>}
                       </TableCell>
                     </TableRow>
@@ -84,6 +90,9 @@ export default function InvoicesPage() {
           </>
         )}
       </Card>
+      <ConfirmDialog open={!!toCancel} title="لغو فاکتور" color="error" confirmText="لغو فاکتور" loading={cancel.isPending}
+        text={`فاکتور ${faDigits(toCancel?.number ?? '')} به مبلغ ${formatMoney(toCancel?.total)} لغو شود؟ اشتراک مرتبط نیز لغو می‌شود.`}
+        onClose={() => setToCancel(null)} onConfirm={() => toCancel && cancel.mutate(toCancel.id)} />
       <Dialog open={!!pay} onClose={() => setPay(null)} maxWidth="xs" fullWidth>
         <DialogTitle>ثبت پرداخت {formatMoney(pay?.total)}</DialogTitle>
         <DialogContent>

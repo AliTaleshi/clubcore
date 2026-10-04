@@ -88,3 +88,21 @@ export function isValidNationalCode(raw: string): boolean {
   const check = Number(c[9]);
   return rem < 2 ? check === rem : check === 11 - rem;
 }
+
+/**
+ * Parses a user-typed whole number, tolerating Persian/Arabic digits and thousand separators
+ * ("1,500,000", "۱٬۵۰۰٬۰۰۰", "1 500 000"). Returns null for anything else so callers never send NaN
+ * (which JSON turns into null and the server would read as 0).
+ */
+export function parseAmount(raw: string, { allowNegative = false } = {}): number | null {
+  let s = latinDigits(raw ?? '').replace(/[\s,٬،_]/g, '').replace(/^[−–]/, '-');
+  const negative = s.startsWith('-');
+  if (negative) {
+    if (!allowNegative) return null;
+    s = s.slice(1);
+  }
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isSafeInteger(n)) return null;
+  return negative ? -n : n;
+}

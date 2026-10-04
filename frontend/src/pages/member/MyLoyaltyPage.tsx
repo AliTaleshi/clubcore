@@ -67,7 +67,12 @@ export default function MyLoyaltyPage() {
           <Stack direction="row" alignItems="center" spacing={1}>
             <Typography sx={{ fontFamily: 'monospace', fontSize: 20, letterSpacing: 2 }} dir="ltr">{s.referralCode}</Typography>
             <Tooltip title="کپی لینک دعوت">
-              <IconButton onClick={() => navigator.clipboard?.writeText(inviteLink).then(() => notify('لینک دعوت کپی شد'))}
+              <IconButton onClick={() => {
+                // The Clipboard API only exists on HTTPS/localhost; show the link otherwise.
+                if (!navigator.clipboard) return notify(`لینک دعوت: ${inviteLink}`, 'info');
+                navigator.clipboard.writeText(inviteLink).then(() => notify('لینک دعوت کپی شد'),
+                  () => notify(`لینک دعوت: ${inviteLink}`, 'info'));
+              }}
                 aria-label="کپی لینک دعوت"><ContentCopyOutlined /></IconButton>
             </Tooltip>
           </Stack>

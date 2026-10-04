@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Alert, Button, Card, CardContent, Stack, TextField } from '@mui/material';
 import { api, errorMessage } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { PageHeader } from '../../components/common';
 import { useNotify } from '../../components/Notify';
 
 export default function AccountPage() {
   const notify = useNotify();
+  const { user, login } = useAuth();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -18,7 +20,9 @@ export default function AccountPage() {
     if (next !== repeat) return setError('تکرار رمز عبور مطابقت ندارد');
     try {
       await api.post('/auth/change-password', { currentPassword: current || null, newPassword: next });
-      notify('رمز عبور تغییر کرد');
+      // The server signs out every session on a password change; start a fresh one for this device.
+      if (user) await login(user.phone, next);
+      notify('رمز عبور تغییر کرد؛ سایر دستگاه‌ها از حساب خارج شدند');
       setCurrent(''); setNext(''); setRepeat('');
     } catch (err) {
       setError(errorMessage(err));

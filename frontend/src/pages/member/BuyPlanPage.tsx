@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { Alert, Button, Card, CardActions, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Divider,
   Grid, Stack, TextField, Typography } from '@mui/material';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage } from '../../api/client';
 import type { Plan, PurchaseResult, Quote } from '../../api/types';
 import { Loading, PageHeader } from '../../components/common';
@@ -12,6 +12,7 @@ import { payOnline } from './payOnline';
 
 export default function BuyPlanPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [code, setCode] = useState('');
   const [appliedCode, setAppliedCode] = useState('');
@@ -34,6 +35,8 @@ export default function BuyPlanPage() {
       planId: plan!.id, startDate: start, discountCode: appliedCode || null,
     }).then((r) => r.data),
     onSuccess: async (res) => {
+      qc.invalidateQueries({ queryKey: ['me-member'] });
+      qc.invalidateQueries({ queryKey: ['my-invoices'] });
       if (res.paid) {
         navigate('/me');
         return;
@@ -79,7 +82,11 @@ export default function BuyPlanPage() {
         <DialogTitle>خرید «{plan?.name}»</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && (
+              <Alert severity="error" action={error.includes('در انتظار پرداخت') && (
+                <Button color="inherit" size="small" component={RouterLink} to="/me/invoices">فاکتورها</Button>
+              )}>{error}</Alert>
+            )}
             <JalaliDateField label="تاریخ شروع (اختیاری)" value={start} onChange={setStart} disablePast />
             <Stack direction="row" spacing={1}>
               <TextField label="کد تخفیف جایزه" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} inputProps={{ dir: 'ltr' }} />

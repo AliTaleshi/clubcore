@@ -9,10 +9,16 @@ import { faDigits, formatDate, latinDigits } from '../../utils/format';
 type Method = 'QR' | 'CARD' | 'MANUAL';
 type Outcome = { ok: true; result: ScanResult } | { ok: false; message: string };
 
+/**
+ * A member QR token is valid for 60 s. The camera keeps reading it while it stays in view, and every scan toggles
+ * check-in/check-out, so each distinct code is accepted only once during its validity window.
+ */
+const QR_REUSE_WINDOW_MS = 65_000;
+
 /** Camera QR scanner; html5-qrcode is loaded lazily so the page also works on devices without a camera. */
 function CameraScanner({ onScan }: { onScan: (text: string) => void }) {
   const [error, setError] = useState<string | null>(null);
-  const last = useRef<{ text: string; at: number }>({ text: '', at: 0 });
+  const seen = useRef(new Map<string, number>());
   useEffect(() => {
     let scanner: { stop: () => Promise<void>; clear: () => void } | null = null;
     let cancelled = false;
@@ -22,9 +28,11 @@ function CameraScanner({ onScan }: { onScan: (text: string) => void }) {
       scanner = s;
       s.start({ facingMode: 'environment' }, { fps: 8, qrbox: 240 }, (text) => {
         const now = Date.now();
-        // Ignore the same code read repeatedly while it stays in front of the camera.
-        if (text === last.current.text && now - last.current.at < 5000) return;
-        last.current = { text, at: now };
+        for (const [code, at] of seen.current) {
+          if (now - at > QR_REUSE_WINDOW_MS) seen.current.delete(code);
+        }
+        if (seen.current.has(text)) return;
+        seen.current.set(text, now);
         onScan(text);
       }, () => undefined).catch(() => setError('دسترسی به دوربین ممکن نیست؛ از کارت یا ورود دستی استفاده کنید'));
     });

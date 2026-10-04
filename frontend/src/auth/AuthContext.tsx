@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, tokenStore } from '../api/client';
 import type { Tokens, User } from '../api/types';
 import type { Role } from '../utils/labels';
@@ -17,22 +18,31 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(Boolean(tokenStore.access));
+  const queryClient = useQueryClient();
+
+  // Cached server data belongs to the signed-in user; drop it whenever the user changes so the next person on a
+  // shared reception PC never sees the previous user's data.
+  const resetCache = useCallback(() => queryClient.clear(), [queryClient]);
 
   useEffect(() => {
-    tokenStore.onExpired(() => setUser(null));
+    tokenStore.onExpired(() => {
+      resetCache();
+      setUser(null);
+    });
     if (!tokenStore.access) return;
     api
       .get<User>('/auth/me')
       .then((r) => setUser(r.data))
       .catch(() => tokenStore.clear())
       .finally(() => setLoading(false));
-  }, []);
+  }, [resetCache]);
 
   const loginWithTokens = useCallback((tokens: Tokens) => {
+    resetCache();
     tokenStore.set(tokens);
     setUser(tokens.user);
     return tokens.user;
-  }, []);
+  }, [resetCache]);
 
   const login = useCallback(
     async (phone: string, password: string) => {
@@ -45,9 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     const refreshToken = tokenStore.refresh;
     tokenStore.clear();
+    resetCache();
     setUser(null);
     if (refreshToken) await api.post('/auth/logout', { refreshToken }).catch(() => undefined);
-  }, []);
+  }, [resetCache]);
 
   const hasRole = useCallback((...roles: Role[]) => !!user && roles.includes(user.role), [user]);
 

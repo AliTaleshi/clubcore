@@ -14,9 +14,10 @@ export function renderApp(ui: ReactElement, { route = '/', as }: { route?: strin
   }
   const client = createQueryClient();
   client.setDefaultOptions({ queries: { retry: false, staleTime: 0 } });
-  return render(
+  const result = render(
     <MemoryRouter initialEntries={[route]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Providers queryClient={client}>{ui}</Providers>
     </MemoryRouter>,
   );
+  return { ...result, client };
 }

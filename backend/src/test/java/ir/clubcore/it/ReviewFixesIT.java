@@ -191,6 +191,16 @@ class ReviewFixesIT extends ItBase {
     }
 
     @Test
+    void missingPriceIsRejectedInsteadOfCreatingAFreePlan() {
+        var body = new HashMap<String, Object>();
+        body.put("name", "بدون قیمت");
+        body.put("durationDays", 30);
+        body.put("price", null);
+        var res = api.post("/api/plans", admin, body).expect(400);
+        assertThat((Map<String, Object>) res.json("$.errors")).containsKey("price");
+    }
+
+    @Test
     void settingsRejectInconsistentLoyaltyRulesAndGatewayChanges() {
         api.put("/api/settings", admin, Map.of("loyalty.goldDiscountPercent", "150")).expect(400);
         api.put("/api/settings", admin, Map.of("loyalty.silverThreshold", "5000")).expect(400);

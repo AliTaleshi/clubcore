@@ -156,6 +156,9 @@ public class LoyaltyController {
         if (req.type() == RewardType.DISCOUNT_PERCENT && (req.value() < 1 || req.value() > 100)) {
             throw new BusinessException("درصد تخفیف باید بین ۱ تا ۱۰۰ باشد");
         }
+        if (req.type() == RewardType.DISCOUNT_AMOUNT && req.value() < 1) {
+            throw new BusinessException("مبلغ تخفیف باید مثبت باشد");
+        }
         if (req.active() != null) {
             r.setActive(req.active());
         }

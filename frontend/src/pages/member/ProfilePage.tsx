@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, CardContent, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage } from '../../api/client';
+import { api, errorMessage, ValidationError } from '../../api/client';
 import type { MemberSummary } from '../../api/types';
 import { Loading, PageHeader } from '../../components/common';
 import { JalaliDateField } from '../../components/JalaliDateField';
 import { useNotify } from '../../components/Notify';
-import { faDigits } from '../../utils/format';
+import { faDigits, isValidPhone, normalizePhone } from '../../utils/format';
 
 export default function ProfilePage() {
   const qc = useQueryClient();
@@ -21,7 +21,17 @@ export default function ProfilePage() {
     }
   }, [data]);
   const save = useMutation({
-    mutationFn: () => api.put('/me/member', { ...form, phone: data!.member.phone, gender: form.gender || null }),
+    mutationFn: () => {
+      if (!form.fullName.trim()) throw new ValidationError('نام الزامی است');
+      const emergency = form.emergencyPhone.trim();
+      if (emergency && !isValidPhone(emergency)) throw new ValidationError('شماره اضطراری نامعتبر است');
+      return api.put('/me/member', {
+        ...form,
+        phone: data!.member.phone,
+        gender: form.gender || null,
+        emergencyPhone: emergency ? normalizePhone(emergency) : null,
+      });
+    },
     onSuccess: () => { notify('پروفایل ذخیره شد'); qc.invalidateQueries({ queryKey: ['me-member'] }); },
     onError: (e) => notify(errorMessage(e), 'error'),
   });

@@ -75,8 +75,8 @@ cd frontend && npm install && npm run dev
 | Suite | Command | Notes |
 |---|---|---|
 | Backend unit (29) | `cd backend && ./mvnw test` | validators, churn model, QR tokens, accounting rules, Zarinpal/Zibal clients, gateway registry, loyalty tiers, AI fallbacks |
-| Backend integration (54) | `cd backend && ./mvnw verify` | Testcontainers PostgreSQL 16 + MockMvc: auth/OTP/refresh, RBAC, memberships, attendance, payments, accounting, loyalty, CRM, AI (fake LLM), concurrency (parallel check-ins, payments, redemptions) |
-| Frontend (19) | `cd frontend && npm test` | Vitest + Testing Library + MSW |
+| Backend integration (55) | `cd backend && ./mvnw verify` | Testcontainers PostgreSQL 16 + MockMvc: auth/OTP/refresh, RBAC, memberships, attendance, payments, accounting, loyalty, CRM, AI (fake LLM), concurrency (parallel check-ins, payments, redemptions) |
+| Frontend (25) | `cd frontend && npm test` | Vitest + Testing Library + MSW |
 | End-to-end | see below | Playwright against the full Docker Compose stack |
 
 End-to-end tests run against the running stack (`SEED_DEMO=true`):

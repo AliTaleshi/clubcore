@@ -11,11 +11,15 @@ import { membershipStatus, tierColors } from '../../utils/labels';
 
 /** Member entry card: the QR rotates every 30 s and each code is valid for 60 s, so screenshots cannot be shared. */
 function QrCard({ membershipNo }: { membershipNo: string }) {
-  const { data, dataUpdatedAt } = useQuery({
+  const { data, dataUpdatedAt, refetch } = useQuery({
     queryKey: ['my-qr'],
     queryFn: () => api.get<{ token: string; expiresAt: number }>('/me/qr').then((r) => r.data),
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+    // The code expires after 60 s, so never show a cached one when the member comes back to the tab.
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -23,6 +27,10 @@ function QrCard({ membershipNo }: { membershipNo: string }) {
     return () => clearInterval(t);
   }, []);
   const remaining = Math.max(0, 30 - Math.floor((now - dataUpdatedAt) / 1000));
+  // Timers are throttled in background tabs; refresh as soon as the shown code is due.
+  useEffect(() => {
+    if (dataUpdatedAt && remaining === 0) refetch();
+  }, [remaining, dataUpdatedAt, refetch]);
   return (
     <Card sx={{ textAlign: 'center' }}>
       <CardContent>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import {
   Box,
   Button,
@@ -20,6 +20,9 @@ import { useTheme } from '@mui/material/styles';
 import { chartColors } from '../theme';
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+  useEffect(() => {
+    document.title = `${title} | کلاب‌کور`;
+  }, [title]);
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }} justifyContent="space-between"
       alignItems={{ xs: 'stretch', sm: 'center' }}>

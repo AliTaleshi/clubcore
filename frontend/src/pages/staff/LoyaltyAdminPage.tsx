@@ -3,12 +3,12 @@ import { Alert, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogCo
   Grid, List, ListItem, ListItemText, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage } from '../../api/client';
+import { api, errorMessage, requireAmount } from '../../api/client';
 import type { Reward } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { Empty, PageHeader, StatCard } from '../../components/common';
 import { useNotify } from '../../components/Notify';
-import { faDigits, formatNumber, latinDigits } from '../../utils/format';
+import { faDigits, formatNumber, parseAmount } from '../../utils/format';
 import { rewardType } from '../../utils/labels';
 import { rewardValue } from '../member/MyLoyaltyPage';
 
@@ -33,7 +33,12 @@ export default function LoyaltyAdminPage() {
   };
   const save = useMutation({
     mutationFn: () => {
-      const body = { ...form, pointsCost: Number(latinDigits(form.pointsCost)), value: Number(latinDigits(form.value) || 0) };
+      const body = {
+        ...form,
+        pointsCost: requireAmount(parseAmount(form.pointsCost), 'امتیاز لازم', { min: 1 }),
+        value: form.type === 'GIFT' ? 0
+          : requireAmount(parseAmount(form.value), form.type === 'DISCOUNT_PERCENT' ? 'درصد تخفیف' : 'مبلغ تخفیف', { min: 1 }),
+      };
       return edit ? api.put(`/loyalty/rewards/${edit.id}`, body) : api.post('/loyalty/rewards', body);
     },
     onSuccess: () => { notify('جایزه ذخیره شد'); setEdit(undefined); qc.invalidateQueries({ queryKey: ['rewards'] }); },

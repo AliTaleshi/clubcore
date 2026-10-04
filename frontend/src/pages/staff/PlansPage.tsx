@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Alert, Button, Card, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Grid, Switch,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage } from '../../api/client';
+import { api, errorMessage, requireAmount } from '../../api/client';
 import type { Plan } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { Empty, Loading, PageHeader } from '../../components/common';
 import { useNotify } from '../../components/Notify';
-import { faDigits, formatMoney, latinDigits } from '../../utils/format';
+import { faDigits, formatMoney, parseAmount } from '../../utils/format';
 
 const blank = { name: '', description: '', durationDays: '30', sessionLimit: '', price: '', maxFreezeDays: '0', active: true };
 
@@ -30,8 +30,13 @@ export default function PlansPage() {
   };
   const save = useMutation({
     mutationFn: () => {
-      const body = { ...form, durationDays: Number(latinDigits(form.durationDays)), price: Number(latinDigits(form.price)),
-        sessionLimit: form.sessionLimit ? Number(latinDigits(form.sessionLimit)) : null, maxFreezeDays: Number(latinDigits(form.maxFreezeDays) || 0) };
+      const body = {
+        ...form,
+        durationDays: requireAmount(parseAmount(form.durationDays), 'مدت پلن', { min: 1 }),
+        price: requireAmount(parseAmount(form.price), 'قیمت'),
+        sessionLimit: form.sessionLimit.trim() ? requireAmount(parseAmount(form.sessionLimit), 'تعداد جلسات', { min: 1 }) : null,
+        maxFreezeDays: form.maxFreezeDays.trim() ? requireAmount(parseAmount(form.maxFreezeDays), 'حداکثر روز فریز') : 0,
+      };
       return edit ? api.put(`/plans/${edit.id}`, body) : api.post('/plans', body);
     },
     onSuccess: () => { notify('پلن ذخیره شد'); setEdit(undefined); qc.invalidateQueries({ queryKey: ['plans'] }); },

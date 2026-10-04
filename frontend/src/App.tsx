@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loading } from './components/common';
 import { RequireAuth } from './auth/RequireAuth';
 import { homeFor, useAuth } from './auth/AuthContext';
@@ -42,7 +43,9 @@ function Home() {
 }
 
 export default function App() {
+  const location = useLocation();
   return (
+    <ErrorBoundary resetKey={location.pathname}>
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/" element={<Home />} />
@@ -97,5 +100,6 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

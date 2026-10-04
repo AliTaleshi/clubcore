@@ -69,16 +69,22 @@ async function refreshAccess(): Promise<string | null> {
     tokenStore.set(data);
     return data.accessToken;
   } catch {
-    return null;
+    // Refresh tokens rotate: if another tab refreshed with the same token first, ours is now revoked but the
+    // session is fine. Use the tokens that tab stored instead of logging out.
+    const current = tokenStore.refresh;
+    return current && current !== refreshToken ? tokenStore.access : null;
   }
 }
+
+/** Endpoints whose 401 means "bad credentials", not "access token expired" — never retried with a refresh. */
+const NO_REFRESH = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/register', '/auth/otp/'];
 
 api.interceptors.response.use(
   (r) => r,
   async (error: AxiosError) => {
     const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
-    const isAuthCall = original?.url?.startsWith('/auth/');
-    if (error.response?.status === 401 && original && !original._retry && !isAuthCall) {
+    const skip = NO_REFRESH.some((p) => original?.url?.startsWith(p));
+    if (error.response?.status === 401 && original && !original._retry && !skip) {
       original._retry = true;
       refreshing = refreshing ?? refreshAccess().finally(() => (refreshing = null));
       const token = await refreshing;
@@ -93,8 +99,19 @@ api.interceptors.response.use(
   },
 );
 
+/** Client-side validation failure; its message is shown to the user as-is. */
+export class ValidationError extends Error {}
+
+/** Throws a ValidationError when a parsed number is missing or out of range. */
+export function requireAmount(value: number | null, label: string, { min = 0 } = {}): number {
+  if (value === null) throw new ValidationError(`${label} را به‌صورت عدد صحیح وارد کنید`);
+  if (value < min) throw new ValidationError(`${label} باید حداقل ${min.toLocaleString('fa-IR')} باشد`);
+  return value;
+}
+
 /** Extracts the Persian message from a ProblemDetail error response. */
 export function errorMessage(err: unknown): string {
+  if (err instanceof ValidationError) return err.message;
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as { detail?: string; errors?: Record<string, string> } | undefined;
     if (data?.errors) {

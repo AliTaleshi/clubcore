@@ -19,6 +19,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 @RestController
@@ -28,7 +29,7 @@ public class PlanController {
             @Size(max = 500) String description,
             @Min(value = 1, message = "مدت پلن باید حداقل ۱ روز باشد") @Max(730) int durationDays,
             @Min(value = 1, message = "تعداد جلسات باید مثبت باشد") Integer sessionLimit,
-            @Min(value = 0, message = "قیمت نمی‌تواند منفی باشد") long price,
+            @NotNull(message = "قیمت الزامی است") @Min(value = 0, message = "قیمت نمی‌تواند منفی باشد") Long price,
             @Min(0) @Max(365) int maxFreezeDays,
             Boolean active) {
     }

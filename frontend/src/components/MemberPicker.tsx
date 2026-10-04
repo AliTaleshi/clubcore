@@ -4,14 +4,16 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Member, Page } from '../api/types';
 import { faDigits } from '../utils/format';
+import { useDebounced } from '../hooks/useDebounced';
 
 export function MemberPicker({ value, onChange, label = 'انتخاب عضو' }: {
   value: Member | null; onChange: (m: Member | null) => void; label?: string;
 }) {
   const [input, setInput] = useState('');
+  const query = useDebounced(input.trim());
   const { data, isFetching } = useQuery({
-    queryKey: ['member-search', input],
-    queryFn: () => api.get<Page<Member>>('/members', { params: { q: input, size: 15 } }).then((r) => r.data.content),
+    queryKey: ['member-search', query],
+    queryFn: () => api.get<Page<Member>>('/members', { params: { q: query, size: 15 } }).then((r) => r.data.content),
   });
   return (
     <Autocomplete

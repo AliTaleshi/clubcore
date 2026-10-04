@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Grid,
   IconButton, MenuItem, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow,
   Tabs, TextField, Typography } from '@mui/material';
@@ -8,12 +8,12 @@ import AddCircleOutline from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutline from '@mui/icons-material/RemoveCircleOutline';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage } from '../../api/client';
+import { api, errorMessage, requireAmount } from '../../api/client';
 import type { Account, Expense, IncomeStatement, JournalEntry, LedgerRow, Page, SeriesPoint, TrialRow } from '../../api/types';
 import { ChartBox, Empty, Loading, PageHeader, StatCard, useChartColors } from '../../components/common';
 import { JalaliDateField } from '../../components/JalaliDateField';
 import { useNotify } from '../../components/Notify';
-import { faDigits, formatDate, formatMoney, jalaliMonthKey, latinDigits, toIsoDate } from '../../utils/format';
+import { faDigits, formatDate, formatMoney, jalaliMonthKey, latinDigits, parseAmount, toIsoDate } from '../../utils/format';
 import { accountType } from '../../utils/labels';
 
 const daysAgo = (n: number) => toIsoDate(new Date(Date.now() - n * 86400000));
@@ -186,7 +186,15 @@ function ManualEntryDialog({ open, onClose }: { open: boolean; onClose: () => vo
   const [date, setDate] = useState<string | null>(toIsoDate(new Date()));
   const [lines, setLines] = useState([{ accountId: '', debit: '', credit: '' }, { accountId: '', debit: '', credit: '' }]);
   const [error, setError] = useState<string | null>(null);
-  const num = (s: string) => Number(latinDigits(s) || 0);
+  useEffect(() => {
+    if (!open) return;
+    setDescription('');
+    setDate(toIsoDate(new Date()));
+    setLines([{ accountId: '', debit: '', credit: '' }, { accountId: '', debit: '', credit: '' }]);
+    setError(null);
+  }, [open]);
+  // Blank cells count as 0; anything unparsable makes the entry invalid (NaN) so it can't be submitted.
+  const num = (s: string) => (s.trim() ? parseAmount(s) ?? Number.NaN : 0);
   const totalDebit = lines.reduce((s, l) => s + num(l.debit), 0);
   const totalCredit = lines.reduce((s, l) => s + num(l.credit), 0);
   const save = useMutation({
@@ -239,13 +247,18 @@ function Expenses({ from, to }: { from: string; to: string }) {
     queryFn: () => api.get<Page<Expense>>('/accounting/expenses', { params: { from, to, size: 100 } }).then((r) => r.data),
   });
   const save = useMutation({
-    mutationFn: () => api.post('/accounting/expenses', { ...form, accountId: Number(form.accountId), paidFromAccountId: Number(form.paidFromAccountId), amount: Number(latinDigits(form.amount)) }),
+    mutationFn: () => api.post('/accounting/expenses', { ...form, accountId: Number(form.accountId), paidFromAccountId: Number(form.paidFromAccountId),
+      amount: requireAmount(parseAmount(form.amount), 'مبلغ', { min: 1 }) }),
     onSuccess: () => { notify('هزینه ثبت شد'); setOpen(false); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['income-statement'] }); },
     onError: (e) => setError(errorMessage(e)),
   });
   return (
     <Card>
-      <Box sx={{ p: 2 }}><Button variant="contained" onClick={() => { setError(null); setOpen(true); }}>ثبت هزینه</Button></Box>
+      <Box sx={{ p: 2 }}><Button variant="contained" onClick={() => {
+        setError(null);
+        setForm({ accountId: '', paidFromAccountId: '', amount: '', description: '', expenseDate: toIsoDate(new Date()) });
+        setOpen(true);
+      }}>ثبت هزینه</Button></Box>
       {isLoading ? <Loading /> : !data?.content.length ? <Empty /> : (
         <Table size="small">
           <TableHead><TableRow><TableCell>تاریخ</TableCell><TableCell>نوع هزینه</TableCell><TableCell>شرح</TableCell><TableCell>پرداخت از</TableCell><TableCell>مبلغ</TableCell></TableRow></TableHead>

@@ -93,7 +93,9 @@ export default function AssistantPage() {
         <Stack component="form" direction="row" spacing={1} sx={{ p: 2, borderTop: 1, borderColor: 'divider' }} onSubmit={submit}>
           <TextField placeholder="پیام خود را بنویسید…" value={text} onChange={(e) => setText(e.target.value)}
             multiline maxRows={4} inputProps={{ 'aria-label': 'پیام' }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} />
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
+            }} />
           <Button type="submit" variant="contained" disabled={!text.trim() || send.isPending} aria-label="ارسال">
             <SendRounded sx={{ transform: 'scaleX(-1)' }} />
           </Button>

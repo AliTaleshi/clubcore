@@ -12,6 +12,7 @@ import { JalaliDateField } from '../../components/JalaliDateField';
 import { useNotify } from '../../components/Notify';
 import { faDigits, formatDate, formatDateTime, isValidPhone, normalizePhone } from '../../utils/format';
 import { activityType, leadStatus } from '../../utils/labels';
+import { useDebounced } from '../../hooks/useDebounced';
 
 const SOURCES = ['اینستاگرام', 'معرفی دوستان', 'گوگل', 'حضوری', 'بنر محیطی', 'تماس تلفنی', 'سایر'];
 
@@ -36,9 +37,10 @@ function Pipeline() {
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<Lead | null>(null);
   const [create, setCreate] = useState(false);
+  const query = useDebounced(q.trim());
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', q],
-    queryFn: () => api.get<Page<Lead>>('/crm/leads', { params: { q, size: 100 } }).then((r) => r.data),
+    queryKey: ['leads', query],
+    queryFn: () => api.get<Page<Lead>>('/crm/leads', { params: { q: query, size: 100 } }).then((r) => r.data),
   });
   const { data: stats } = useQuery({
     queryKey: ['lead-stats'],
@@ -56,6 +58,11 @@ function Pipeline() {
           </Stack>
         </Grid>
       </Grid>
+      {data && data.totalElements > data.content.length && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {faDigits(data.content.length)} سرنخ اخیر از {faDigits(data.totalElements)} سرنخ نمایش داده شده است؛ برای یافتن بقیه جستجو کنید.
+        </Alert>
+      )}
       {isLoading ? <Loading /> : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(5, minmax(0, 1fr))' }, gap: 1.5 }}>
           {Object.keys(leadStatus).map((s) => {
