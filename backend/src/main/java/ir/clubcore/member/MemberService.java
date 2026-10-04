@@ -2,12 +2,12 @@ package ir.clubcore.member;
 
 import java.util.List;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Paging;
 import ir.clubcore.common.Codes;
 import ir.clubcore.common.Digits;
 import ir.clubcore.common.NationalCodes;
@@ -74,6 +74,9 @@ public class MemberService {
         m.getUser().setFullName(req.fullName().trim());
         if (req.active() != null) {
             m.getUser().setActive(req.active());
+            if (!req.active()) {
+                userService.revokeSessions(m.getUser().getId());
+            }
         }
         apply(m, req);
         return MemberDto.of(m);
@@ -103,7 +106,7 @@ public class MemberService {
             query = Phones.normalize(query);
         }
         return PageResponse.of(members.search(query, coachFilter,
-                PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "id"))), MemberDto::of);
+                Paging.of(page, size, 100, Sort.by(Sort.Direction.DESC, "id"))), MemberDto::of);
     }
 
     public Member get(Long id) {

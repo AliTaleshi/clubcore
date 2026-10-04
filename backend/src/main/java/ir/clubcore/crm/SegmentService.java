@@ -42,7 +42,7 @@ public class SegmentService {
         return switch (segment) {
             case ALL_ACTIVE -> activeMembers(today);
             case EXPIRING_SOON -> distinct(memberships.expiringBetween(today, today.plusDays(7)));
-            case EXPIRED_RECENTLY -> members.findAll().stream().filter(m -> {
+            case EXPIRED_RECENTLY -> members.findAllWithUser().stream().filter(m -> {
                 var list = memberships.findByMemberIdOrderByIdDesc(m.getId());
                 boolean hasCurrent = list.stream().anyMatch(ms -> ms.getStatus() == MembershipStatus.ACTIVE
                         || ms.getStatus() == MembershipStatus.FROZEN);
@@ -58,7 +58,7 @@ public class SegmentService {
             }
             case HIGH_CHURN_RISK -> churn.scoreAll().stream().filter(s -> s.level() == ChurnService.Level.HIGH)
                     .map(s -> members.findById(s.memberId()).orElse(null)).filter(m -> m != null).toList();
-            case BIRTHDAY_THIS_WEEK -> members.findAll().stream().filter(m -> m.getBirthDate() != null).filter(m -> {
+            case BIRTHDAY_THIS_WEEK -> members.findAllWithUser().stream().filter(m -> m.getBirthDate() != null).filter(m -> {
                 MonthDay bd = MonthDay.from(m.getBirthDate());
                 for (int i = 0; i < 7; i++) {
                     if (MonthDay.from(today.plusDays(i)).equals(bd)) {
@@ -71,7 +71,7 @@ public class SegmentService {
     }
 
     private List<Member> activeMembers(LocalDate today) {
-        return members.findAll().stream().filter(m -> m.getUser().isActive())
+        return members.findAllWithUser().stream().filter(m -> m.getUser().isActive())
                 .filter(m -> memberships.findByMemberIdAndStatusIn(m.getId(),
                         Set.of(MembershipStatus.ACTIVE, MembershipStatus.FROZEN)).stream()
                         .anyMatch(ms -> !ms.getEndDate().isBefore(today)))

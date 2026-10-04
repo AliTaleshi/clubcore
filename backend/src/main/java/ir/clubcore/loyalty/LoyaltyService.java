@@ -126,9 +126,10 @@ public class LoyaltyService {
             r.setStatus(RedemptionStatus.USED);
             r.setUsedAt(clock.instant());
         });
-        // Referral bonus on the referred member's first paid invoice.
+        // Referral bonus on the referred member's first invoice actually paid for (free invoices don't count).
         Member referrer = m.getReferredBy();
-        if (referrer != null && invoices.countByMemberIdAndStatus(m.getId(), InvoiceStatus.PAID) == 1) {
+        if (referrer != null && invoice.getTotal() > 0
+                && invoices.countByMemberIdAndStatusAndTotalGreaterThan(m.getId(), InvoiceStatus.PAID, 0) == 1) {
             String ref = "REFERRAL:" + m.getId();
             if (!txs.existsByMemberIdAndReasonAndReference(referrer.getId(), LoyaltyReason.REFERRAL, ref)) {
                 int bonus = (int) settings.getLong("loyalty.referralPoints", 200);
@@ -158,6 +159,7 @@ public class LoyaltyService {
 
     @Transactional
     public Redemption redeem(Member m, Long rewardId) {
+        members.lockById(m.getId());
         Reward reward = rewards.findById(rewardId).filter(Reward::isActive)
                 .orElseThrow(() -> BusinessException.notFound("جایزه"));
         long balance = txs.balance(m.getId());
@@ -176,6 +178,19 @@ public class LoyaltyService {
         redemptions.save(r);
         add(m.getId(), -reward.getPointsCost(), LoyaltyReason.REDEEM, "REWARD:" + reward.getId() + ":" + code);
         return r;
+    }
+
+    /** Manual correction by an admin; the balance may not go negative. */
+    @Transactional
+    public LoyaltyTransaction adjust(Member m, int points, String note) {
+        if (points == 0) {
+            throw new BusinessException("مقدار امتیاز نمی‌تواند صفر باشد");
+        }
+        members.lockById(m.getId());
+        if (points < 0 && txs.balance(m.getId()) + points < 0) {
+            throw new BusinessException("موجودی امتیاز عضو کافی نیست");
+        }
+        return add(m.getId(), points, LoyaltyReason.ADJUST, note);
     }
 
     public List<Redemption> redemptionsOf(Long memberId) {

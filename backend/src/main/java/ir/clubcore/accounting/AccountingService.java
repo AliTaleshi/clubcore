@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.springframework.context.event.EventListener;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +19,7 @@ import ir.clubcore.billing.InvoicePaidEvent;
 import ir.clubcore.billing.Payment;
 import ir.clubcore.billing.PaymentMethod;
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Paging;
 import ir.clubcore.common.PageResponse;
 import ir.clubcore.membership.MembershipRepository;
 
@@ -196,7 +196,7 @@ public class AccountingService {
     }
 
     public PageResponse<EntryDto> journal(LocalDate from, LocalDate to, int page, int size) {
-        return PageResponse.of(entries.between(from, to, PageRequest.of(page, Math.min(size, 100),
+        return PageResponse.of(entries.between(from, to, Paging.of(page, size, 100,
                 Sort.by(Sort.Direction.DESC, "entryDate", "id"))), EntryDto::of);
     }
 
@@ -205,22 +205,34 @@ public class AccountingService {
     }
 
     public PageResponse<ExpenseDto> expenses(LocalDate from, LocalDate to, int page, int size) {
-        return PageResponse.of(expenses.findByExpenseDateBetween(from, to, PageRequest.of(page, Math.min(size, 100),
+        return PageResponse.of(expenses.findByExpenseDateBetween(from, to, Paging.of(page, size, 100,
                 Sort.by(Sort.Direction.DESC, "expenseDate", "id"))), ExpenseDto::of);
     }
 
+    /**
+     * Debit/credit columns are the period's turnover (so they always balance). The balance column is the cumulative
+     * balance at {@code to} for balance-sheet accounts and the period result for income/expense accounts.
+     */
     public List<TrialBalanceRow> trialBalance(LocalDate from, LocalDate to) {
+        Map<Long, long[]> period = totals(from, to);
+        Map<Long, long[]> cumulative = totals(LocalDate.of(1900, 1, 1), to);
+        List<TrialBalanceRow> rows = new ArrayList<>();
+        for (Account a : accounts.findAllByOrderByCodeAsc()) {
+            long[] t = period.getOrDefault(a.getId(), new long[] {0, 0});
+            boolean profitAndLoss = a.getType() == AccountType.INCOME || a.getType() == AccountType.EXPENSE;
+            long[] b = profitAndLoss ? t : cumulative.getOrDefault(a.getId(), new long[] {0, 0});
+            long balance = a.getType().debitNormal() ? b[0] - b[1] : b[1] - b[0];
+            rows.add(new TrialBalanceRow(a.getId(), a.getCode(), a.getName(), a.getType(), t[0], t[1], balance));
+        }
+        return rows;
+    }
+
+    private Map<Long, long[]> totals(LocalDate from, LocalDate to) {
         Map<Long, long[]> totals = new HashMap<>();
         for (Object[] row : entries.totalsByAccount(from, to)) {
             totals.put((Long) row[0], new long[] {((Number) row[1]).longValue(), ((Number) row[2]).longValue()});
         }
-        List<TrialBalanceRow> rows = new ArrayList<>();
-        for (Account a : accounts.findAllByOrderByCodeAsc()) {
-            long[] t = totals.getOrDefault(a.getId(), new long[] {0, 0});
-            long balance = a.getType().debitNormal() ? t[0] - t[1] : t[1] - t[0];
-            rows.add(new TrialBalanceRow(a.getId(), a.getCode(), a.getName(), a.getType(), t[0], t[1], balance));
-        }
-        return rows;
+        return totals;
     }
 
     public IncomeStatement incomeStatement(LocalDate from, LocalDate to) {

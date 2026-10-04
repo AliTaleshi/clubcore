@@ -11,6 +11,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -61,6 +62,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ProblemDetail unexpected(Exception ex) {
+        // Spring MVC's own exceptions (wrong method, unsupported media type, ...) carry the right 4xx status.
+        if (ex instanceof ErrorResponse er && er.getStatusCode().is4xxClientError()) {
+            HttpStatus status = HttpStatus.valueOf(er.getStatusCode().value());
+            String message = switch (status) {
+                case METHOD_NOT_ALLOWED -> "این متد برای این مسیر پشتیبانی نمی‌شود";
+                case UNSUPPORTED_MEDIA_TYPE -> "نوع محتوای درخواست پشتیبانی نمی‌شود";
+                case NOT_ACCEPTABLE -> "قالب پاسخ درخواستی پشتیبانی نمی‌شود";
+                default -> "درخواست نامعتبر است";
+            };
+            return problem(status, message);
+        }
         log.error("Unexpected error", ex);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "خطای غیرمنتظره در سرور رخ داد");
     }

@@ -8,16 +8,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Digits;
 
 @Service
 public class SettingService {
 
     public static final String ACTIVE_GATEWAY = "payment.activeGateway";
 
-    /** Settings that may be edited through the API; anything else is rejected. */
-    private static final Set<String> EDITABLE = Set.of("gym.name", "gym.phone", "gym.address", ACTIVE_GATEWAY,
-            "loyalty.checkinPoints", "loyalty.tomanPerPoint", "loyalty.referralPoints", "loyalty.silverThreshold",
-            "loyalty.goldThreshold", "loyalty.silverDiscountPercent", "loyalty.goldDiscountPercent");
+    /** Free-text settings editable through the API. The active gateway has its own endpoint that validates it. */
+    private static final Set<String> TEXT = Set.of("gym.name", "gym.phone", "gym.address");
+
+    /** Numeric loyalty settings with their allowed ranges. */
+    private static final Map<String, long[]> NUMERIC = Map.of(
+            "loyalty.checkinPoints", new long[] {0, 1_000},
+            "loyalty.tomanPerPoint", new long[] {1, 100_000_000},
+            "loyalty.referralPoints", new long[] {0, 100_000},
+            "loyalty.silverThreshold", new long[] {1, 10_000_000},
+            "loyalty.goldThreshold", new long[] {1, 10_000_000},
+            "loyalty.silverDiscountPercent", new long[] {0, 100},
+            "loyalty.goldDiscountPercent", new long[] {0, 100});
 
     private final SettingRepository repo;
 
@@ -49,24 +58,48 @@ public class SettingService {
 
     @Transactional
     public Map<String, String> update(Map<String, String> values) {
+        Map<String, String> clean = new TreeMap<>();
         values.forEach((k, v) -> {
-            if (!EDITABLE.contains(k)) {
+            if (!TEXT.contains(k) && !NUMERIC.containsKey(k)) {
                 throw new BusinessException("تنظیم ناشناخته: " + k);
             }
             if (v == null || v.isBlank()) {
                 throw new BusinessException("مقدار تنظیم نمی‌تواند خالی باشد: " + k);
             }
-            if (k.startsWith("loyalty.")) {
+            String value = Digits.toLatin(v.trim());
+            if (TEXT.contains(k)) {
+                if (value.length() > 200) {
+                    throw new BusinessException("مقدار تنظیم بیش از حد طولانی است: " + k);
+                }
+            } else {
+                long[] range = NUMERIC.get(k);
+                long n;
                 try {
-                    if (Long.parseLong(v.trim()) < 0) {
-                        throw new NumberFormatException();
-                    }
+                    n = Long.parseLong(value);
                 } catch (NumberFormatException e) {
                     throw new BusinessException("مقدار عددی نامعتبر برای " + k);
                 }
+                if (n < range[0] || n > range[1]) {
+                    throw new BusinessException("مقدار " + k + " باید بین " + range[0] + " و " + range[1] + " باشد");
+                }
+                value = String.valueOf(n);
             }
-            set(k, v.trim());
+            clean.put(k, value);
         });
+        // Validate tier consistency against the values that will be in effect after the update.
+        long silver = Long.parseLong(clean.getOrDefault("loyalty.silverThreshold", get("loyalty.silverThreshold", "1000")));
+        long gold = Long.parseLong(clean.getOrDefault("loyalty.goldThreshold", get("loyalty.goldThreshold", "3000")));
+        if (silver >= gold) {
+            throw new BusinessException("آستانه سطح طلایی باید بیشتر از سطح نقره‌ای باشد");
+        }
+        long silverPct = Long.parseLong(clean.getOrDefault("loyalty.silverDiscountPercent",
+                get("loyalty.silverDiscountPercent", "5")));
+        long goldPct = Long.parseLong(clean.getOrDefault("loyalty.goldDiscountPercent",
+                get("loyalty.goldDiscountPercent", "10")));
+        if (silverPct > goldPct) {
+            throw new BusinessException("درصد تخفیف سطح طلایی نباید کمتر از سطح نقره‌ای باشد");
+        }
+        clean.forEach(this::set);
         return all();
     }
 

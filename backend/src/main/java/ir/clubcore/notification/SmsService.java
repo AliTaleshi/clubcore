@@ -3,9 +3,9 @@ package ir.clubcore.notification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 import ir.clubcore.config.AppProperties;
+import ir.clubcore.config.OutboundHttp;
 
 @Service
 public class SmsService {
@@ -13,12 +13,12 @@ public class SmsService {
     private final SmsSender sender;
     private final SmsLogRepository logs;
 
-    public SmsService(AppProperties props, RestClient.Builder builder, SmsLogRepository logs) {
+    public SmsService(AppProperties props, OutboundHttp http, SmsLogRepository logs) {
         this.logs = logs;
         AppProperties.Sms sms = props.sms();
         if ("kavenegar".equalsIgnoreCase(sms.provider()) && sms.kavenegarApiKey() != null
                 && !sms.kavenegarApiKey().isBlank()) {
-            this.sender = new KavenegarSmsSender(builder, sms.kavenegarApiKey(), sms.kavenegarSender());
+            this.sender = new KavenegarSmsSender(http.builder(), sms.kavenegarApiKey(), sms.kavenegarSender());
         } else {
             this.sender = new MockSmsSender();
         }

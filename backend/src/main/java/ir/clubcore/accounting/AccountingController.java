@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.DateRange;
 import ir.clubcore.common.PageResponse;
 import ir.clubcore.config.CurrentUser;
 import jakarta.validation.Valid;
@@ -71,7 +71,7 @@ public class AccountingController {
     public PageResponse<AccountingService.EntryDto> journal(@RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return service.journal(from(from), to(to), page, size);
+        return service.journal(from(from), to(to, from(from)), page, size);
     }
 
     @GetMapping("/journal/{id}")
@@ -94,7 +94,7 @@ public class AccountingController {
     public PageResponse<AccountingService.ExpenseDto> expenses(@RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return service.expenses(from(from), to(to), page, size);
+        return service.expenses(from(from), to(to, from(from)), page, size);
     }
 
     @PostMapping("/expenses")
@@ -107,23 +107,21 @@ public class AccountingController {
     @GetMapping("/reports/trial-balance")
     public List<AccountingService.TrialBalanceRow> trialBalance(@RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to) {
-        return service.trialBalance(from(from), to(to));
+        return service.trialBalance(from(from), to(to, from(from)));
     }
 
     @GetMapping("/reports/income-statement")
     public AccountingService.IncomeStatement incomeStatement(@RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to) {
-        return service.incomeStatement(from(from), to(to));
+        return service.incomeStatement(from(from), to(to, from(from)));
     }
 
     @GetMapping("/reports/series")
     public List<AccountingService.SeriesPoint> series(@RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to) {
         LocalDate f = from(from);
-        LocalDate t = to(to);
-        if (f.plusDays(800).isBefore(t)) {
-            throw new BusinessException("بازه گزارش حداکثر ۸۰۰ روز است");
-        }
+        LocalDate t = to(to, f);
+        DateRange.check(f, t, 800);
         return service.series(f, t);
     }
 
@@ -131,13 +129,13 @@ public class AccountingController {
     @Transactional(readOnly = true)
     public List<AccountingService.LedgerRow> ledger(@PathVariable Long accountId,
             @RequestParam(required = false) LocalDate from, @RequestParam(required = false) LocalDate to) {
-        return service.ledger(accountId, from(from), to(to));
+        return service.ledger(accountId, from(from), to(to, from(from)));
     }
 
     @GetMapping("/reports/sales-by-plan")
     public List<AccountingService.PlanSales> salesByPlan(@RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to) {
-        return service.salesByPlan(from(from), to(to));
+        return service.salesByPlan(from(from), to(to, from(from)));
     }
 
     private LocalDate from(LocalDate from) {
@@ -146,5 +144,12 @@ public class AccountingController {
 
     private LocalDate to(LocalDate to) {
         return to != null ? to : LocalDate.now(clock);
+    }
+
+    /** End of range, validated against its start. */
+    private LocalDate to(LocalDate to, LocalDate from) {
+        LocalDate t = to(to);
+        DateRange.check(from, t);
+        return t;
     }
 }

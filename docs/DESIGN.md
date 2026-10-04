@@ -131,15 +131,18 @@ is the single source of truth.
   (cash/POS by staff, or online by member) activates it. Start date = requested start
   or the day after the member's last active membership ends (renewal stacking).
 - Price = plan price − tier discount − redeemed reward discount (never below 0).
-- Freeze: only `ACTIVE`; unfreezing extends `end_date` by frozen days; total frozen days
-  ≤ `plan.max_freeze_days`.
+- Freeze: only `ACTIVE`, already started and with sessions left; unfreezing extends `end_date` by frozen days;
+  total frozen days ≤ `plan.max_freeze_days`.
+- A session-based membership whose sessions are used up does not delay a renewal: it is expired on activation
+  of the new one, which starts immediately.
 - Nightly job marks memberships past `end_date` (or sessions exhausted) as `EXPIRED`,
   and sends reminders 3 days before expiry.
 
 **Entry / exit**
 - Check-in requires an `ACTIVE` membership covering today with sessions remaining;
   consumes one session for session-based plans.
-- A member can't check in twice without checking out; open sessions are auto-closed at midnight.
+- A member can't check in twice without checking out (member row lock + partial unique index); open sessions are
+  auto-closed at midnight.
 - QR token = HMAC-signed `{memberId, exp}` valid for 60 s; member panel refreshes it every 30 s
   (screenshots can't be reused). Card number lookup for RFID readers. Manual by phone/membership no.
 - Each check-in earns loyalty points (once per day).
@@ -150,7 +153,9 @@ is the single source of truth.
 - Online flow: `POST /api/payments/online {invoiceId}` → redirect to gateway → gateway calls
   back `GET /api/payments/callback/{gateway}` → backend verifies → 302 to
   `/payment/result?id=…` in the SPA. Verification is idempotent.
-- Mock gateway redirects to an SPA page that simulates success/failure (dev & tests).
+- Mock gateway redirects to an SPA page that simulates success/failure (dev & tests). It only exists when
+  `PAYMENT_MOCK_ENABLED=true`; otherwise a stored `MOCK` setting falls back to Zarinpal.
+- Callbacks lock the payment row, then the invoice row, so concurrent callbacks / cash payments settle once.
 - Zibal amounts are converted Toman→Rial (×10); Zarinpal uses `currency=IRT`.
 
 **Accounting** (double-entry, every entry balanced, posted automatically)

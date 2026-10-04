@@ -18,7 +18,7 @@ class QrTokenServiceTest {
     private static AppProperties props() {
         return new AppProperties("http://x", "Asia/Tehran",
                 new AppProperties.Jwt("unit-test-secret-0123456789abcdef0123456789", 30, 14),
-                new AppProperties.Qr(60), null, null, null, null);
+                new AppProperties.Qr(60), null, null, null, null, null);
     }
 
     private static Clock at(long epochSecond) {

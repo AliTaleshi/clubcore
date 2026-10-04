@@ -65,7 +65,7 @@ public class PaymentService {
     public String handleCallback(GatewayType type, Map<String, String> params) {
         PaymentGateway gateway = gateways.get(type);
         String authority = gateway.authorityFrom(params);
-        Payment p = authority == null ? null : payments.findByGatewayAndAuthority(type, authority).orElse(null);
+        Payment p = authority == null ? null : payments.lockByGatewayAndAuthority(type, authority).orElse(null);
         if (p == null) {
             return resultUrl(null, "FAILED");
         }
@@ -84,7 +84,7 @@ public class PaymentService {
         }
         p.setRefId(result.refId());
         p.setCardPan(result.cardPan());
-        Invoice invoice = p.getInvoice();
+        Invoice invoice = invoices.lock(p.getInvoice().getId());
         if (invoice.getStatus() != InvoiceStatus.UNPAID) {
             // Paid twice (e.g. cash at reception meanwhile): keep the record so staff can refund.
             log.warn("Invoice {} already {} when online payment {} verified", invoice.getId(), invoice.getStatus(),

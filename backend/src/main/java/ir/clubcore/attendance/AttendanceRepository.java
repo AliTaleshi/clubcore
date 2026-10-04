@@ -29,6 +29,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     long countByCheckInAtBetween(Instant from, Instant to);
 
+    long countByCheckOutAtIsNull();
+
     @Query("select max(a.checkInAt) from Attendance a where a.member.id = :memberId")
     Instant lastVisit(Long memberId);
 

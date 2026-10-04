@@ -88,10 +88,7 @@ public class MemberController {
 
     @PutMapping("/api/me/member")
     @PreAuthorize("hasRole('MEMBER')")
-    public MemberDto updateMe(@RequestBody MemberRequest req) {
-        if (req.fullName() == null || req.fullName().isBlank()) {
-            throw new ir.clubcore.common.BusinessException("نام الزامی است");
-        }
+    public MemberDto updateMe(@Valid @RequestBody MemberRequest req) {
         return members.updateOwnProfile(members.current().getUser().getId(), req);
     }
 

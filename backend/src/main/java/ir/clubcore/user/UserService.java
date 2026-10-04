@@ -6,7 +6,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ir.clubcore.auth.RefreshTokenRepository;
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Passwords;
 import ir.clubcore.common.Phones;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,10 +20,18 @@ public class UserService {
 
     private final UserRepository users;
     private final PasswordEncoder encoder;
+    private final RefreshTokenRepository refreshTokens;
 
-    public UserService(UserRepository users, PasswordEncoder encoder) {
+    public UserService(UserRepository users, PasswordEncoder encoder, RefreshTokenRepository refreshTokens) {
         this.users = users;
         this.encoder = encoder;
+        this.refreshTokens = refreshTokens;
+    }
+
+    /** Signs the user out everywhere: existing refresh tokens stop working (access tokens expire within minutes). */
+    @Transactional
+    public void revokeSessions(Long userId) {
+        refreshTokens.revokeAllForUser(userId);
     }
 
     public record StaffRequest(@NotBlank(message = "نام الزامی است") @Size(max = 120) String fullName,
@@ -43,6 +53,7 @@ public class UserService {
         }
         User u = new User(normalized, fullName.trim(), role);
         if (rawPassword != null && !rawPassword.isBlank()) {
+            Passwords.validate(rawPassword);
             u.setPasswordHash(encoder.encode(rawPassword));
         }
         return users.save(u);
@@ -80,14 +91,20 @@ public class UserService {
         if (!phone.equals(u.getPhone()) && users.existsByPhone(phone)) {
             throw BusinessException.conflict("این شماره موبایل قبلاً ثبت شده است");
         }
+        boolean roleChanged = u.getRole() != req.role();
         u.setPhone(phone);
         u.setFullName(req.fullName().trim());
         u.setRole(req.role());
         if (req.active() != null) {
             u.setActive(req.active());
         }
-        if (req.password() != null && !req.password().isBlank()) {
+        boolean passwordChanged = req.password() != null && !req.password().isBlank();
+        if (passwordChanged) {
+            Passwords.validate(req.password());
             u.setPasswordHash(encoder.encode(req.password()));
+        }
+        if (!u.isActive() || passwordChanged || roleChanged) {
+            revokeSessions(u.getId());
         }
         return UserDto.of(u);
     }
@@ -102,6 +119,8 @@ public class UserService {
         if (u.getPasswordHash() != null && (current == null || !encoder.matches(current, u.getPasswordHash()))) {
             throw new BusinessException("رمز عبور فعلی اشتباه است");
         }
+        Passwords.validate(next);
         u.setPasswordHash(encoder.encode(next));
+        revokeSessions(userId);
     }
 }

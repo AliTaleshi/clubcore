@@ -45,6 +45,8 @@ app:
     admin-name: ${ADMIN_NAME:مدیر سیستم}
     seed-demo: ${SEED_DEMO:false}
   payment:
+    # The mock gateway completes payments without charging anyone. Only enable it for development and demos.
+    mock-enabled: ${PAYMENT_MOCK_ENABLED:false}
     zarinpal:
       merchant-id: ${ZARINPAL_MERCHANT_ID:00000000-0000-0000-0000-000000000000}
       sandbox: ${ZARINPAL_SANDBOX:true}
@@ -54,7 +56,11 @@ app:
     provider: ${SMS_PROVIDER:mock}
     kavenegar-api-key: ${KAVENEGAR_API_KEY:}
     kavenegar-sender: ${KAVENEGAR_SENDER:}
+  http:
+    connect-timeout-seconds: 5
+    read-timeout-seconds: 20
   ai:
+    churn-cache-seconds: ${AI_CHURN_CACHE_SECONDS:300}
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${AI_MODEL:claude-opus-5}
     max-tokens: ${AI_MAX_TOKENS:4000}

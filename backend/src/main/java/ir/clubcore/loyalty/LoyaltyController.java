@@ -38,7 +38,8 @@ public class LoyaltyController {
     public record RedeemRequest(@NotNull Long rewardId, Long memberId) {
     }
 
-    public record AdjustRequest(@NotNull Long memberId, int points, @NotBlank(message = "توضیح الزامی است") String note) {
+    public record AdjustRequest(@NotNull Long memberId, int points,
+            @NotBlank(message = "توضیح الزامی است") @Size(max = 100, message = "توضیح بیش از حد طولانی است") String note) {
     }
 
     public record LeaderRow(Long memberId, String fullName, long points) {
@@ -120,14 +121,7 @@ public class LoyaltyController {
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public LoyaltyTransaction adjust(@Valid @RequestBody AdjustRequest req) {
-        Member m = members.get(req.memberId());
-        if (req.points() == 0) {
-            throw new BusinessException("مقدار امتیاز نمی‌تواند صفر باشد");
-        }
-        if (req.points() < 0 && loyalty.summary(m).balance() + req.points() < 0) {
-            throw new BusinessException("موجودی امتیاز عضو کافی نیست");
-        }
-        return loyalty.add(m.getId(), req.points(), LoyaltyReason.ADJUST, req.note().trim());
+        return loyalty.adjust(members.get(req.memberId()), req.points(), req.note().trim());
     }
 
     @PostMapping("/gifts/{code}/deliver")
@@ -137,6 +131,7 @@ public class LoyaltyController {
     }
 
     @GetMapping("/leaderboard")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPTIONIST')")
     @Transactional(readOnly = true)
     public List<LeaderRow> leaderboard(@RequestParam(defaultValue = "30") int days) {
         return loyalty.leaderboard(Math.max(1, Math.min(days, 365))).stream().map(r -> {

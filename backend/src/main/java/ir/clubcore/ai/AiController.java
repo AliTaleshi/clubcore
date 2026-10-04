@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import ir.clubcore.config.CurrentUser;
-import ir.clubcore.member.Member;
 import ir.clubcore.member.MemberService;
 import ir.clubcore.user.Role;
 import jakarta.validation.Valid;
@@ -77,15 +75,14 @@ public class AiController {
 
     @PostMapping("/workout-plan")
     @PreAuthorize("hasAnyRole('ADMIN','COACH','MEMBER')")
-    @Transactional(readOnly = true)
     public AiService.Reply workoutPlan(@Valid @RequestBody WorkoutRequest req) {
-        Member m;
+        Long memberId;
         if (currentUser.is(Role.MEMBER)) {
-            m = members.current();
+            memberId = members.current().getId();
         } else {
-            m = req.memberId() == null ? null : members.getAccessible(req.memberId());
+            memberId = req.memberId() == null ? null : members.getAccessible(req.memberId()).getId();
         }
-        return ai.workoutPlan(m, req.goal(), req.level(), req.daysPerWeek(), req.notes());
+        return ai.workoutPlan(memberId, req.goal(), req.level(), req.daysPerWeek(), req.notes());
     }
 
     @PostMapping("/retention-message/{memberId}")

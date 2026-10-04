@@ -67,7 +67,7 @@ public class KpiService {
         var risks = churn.scoreAll();
         return new Snapshot(
                 memberships.countActiveMembers(today),
-                attendance.present().size(),
+                attendance.countByCheckOutAtIsNull(),
                 attendance.countByCheckInAtBetween(startToday, now.plusSeconds(1)),
                 attendance.countByCheckInAtBetween(d30, now.plusSeconds(1)),
                 attendance.countByCheckInAtBetween(d60, d30),

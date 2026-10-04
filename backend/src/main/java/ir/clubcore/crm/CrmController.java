@@ -70,12 +70,12 @@ public class CrmController {
 
     @PostMapping("/leads")
     @ResponseStatus(HttpStatus.CREATED)
-    public Lead create(@RequestBody CrmService.LeadRequest req) {
+    public Lead create(@Valid @RequestBody CrmService.LeadRequest req) {
         return service.create(req, currentUser.id());
     }
 
     @PutMapping("/leads/{id}")
-    public Lead update(@PathVariable Long id, @RequestBody CrmService.LeadRequest req) {
+    public Lead update(@PathVariable Long id, @Valid @RequestBody CrmService.LeadRequest req) {
         return service.update(id, req, currentUser.id());
     }
 

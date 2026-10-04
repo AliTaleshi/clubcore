@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import ir.clubcore.attendance.AttendanceRepository;
 import ir.clubcore.common.BusinessException;
@@ -55,11 +57,13 @@ public class AiService {
     private final SmsService sms;
     private final CrmService crm;
     private final Clock clock;
+    private final TransactionTemplate readTx;
+    private final TransactionTemplate writeTx;
 
     public AiService(LlmClient llm, AiMessageRepository history, UserService users, MemberRepository members,
             MembershipService memberships, AttendanceRepository attendance, LoyaltyService loyalty,
             ChurnService churn, KpiService kpis, SettingService settings, SmsService sms, CrmService crm,
-            Clock clock) {
+            Clock clock, PlatformTransactionManager txManager) {
         this.llm = llm;
         this.history = history;
         this.users = users;
@@ -73,6 +77,11 @@ public class AiService {
         this.sms = sms;
         this.crm = crm;
         this.clock = clock;
+        // Model calls can take a minute or more, so they run outside any transaction: data is read in a short
+        // read-only transaction beforehand and results are written in a separate one afterwards.
+        this.readTx = new TransactionTemplate(txManager);
+        this.readTx.setReadOnly(true);
+        this.writeTx = new TransactionTemplate(txManager);
     }
 
     public Map<String, Object> status() {
@@ -81,7 +90,9 @@ public class AiService {
 
     // ---------------------------------------------------------------- chat assistant
 
-    @Transactional
+    private record ChatInput(String system, List<LlmClient.Turn> turns, String localReply) {
+    }
+
     public Reply chat(Long userId, String message) {
         if (message == null || message.isBlank()) {
             throw new BusinessException("پیام خالی است");
@@ -89,27 +100,32 @@ public class AiService {
         if (message.length() > 2000) {
             throw new BusinessException("پیام بیش از حد طولانی است");
         }
-        User user = users.get(userId);
-        String context = contextFor(user);
-        List<LlmClient.Turn> turns = new ArrayList<>();
-        List<AiMessage> past = new ArrayList<>(history.findTop20ByUserIdOrderByIdDesc(userId));
-        Collections.reverse(past);
-        for (AiMessage m : past) {
-            turns.add(new LlmClient.Turn("user".equals(m.getRole()) ? LlmClient.Speaker.USER
-                    : LlmClient.Speaker.ASSISTANT, m.getContent()));
-        }
-        // The API requires alternating turns starting with the user.
-        while (!turns.isEmpty() && turns.get(0).speaker() != LlmClient.Speaker.USER) {
-            turns.remove(0);
-        }
-        turns.add(new LlmClient.Turn(LlmClient.Speaker.USER, message.trim()));
-
-        String system = systemPrompt(user) + "\n\n<context>\n" + context + "\n</context>";
-        Reply reply = llm.complete(system, normalize(turns), LlmClient.Effort.LOW, 4000)
+        String text = message.trim();
+        ChatInput in = readTx.execute(status -> {
+            User user = users.get(userId);
+            String context = contextFor(user);
+            List<LlmClient.Turn> turns = new ArrayList<>();
+            List<AiMessage> past = new ArrayList<>(history.findTop20ByUserIdOrderByIdDesc(userId));
+            Collections.reverse(past);
+            for (AiMessage m : past) {
+                turns.add(new LlmClient.Turn("user".equals(m.getRole()) ? LlmClient.Speaker.USER
+                        : LlmClient.Speaker.ASSISTANT, m.getContent()));
+            }
+            // The API requires alternating turns starting with the user.
+            while (!turns.isEmpty() && turns.get(0).speaker() != LlmClient.Speaker.USER) {
+                turns.remove(0);
+            }
+            turns.add(new LlmClient.Turn(LlmClient.Speaker.USER, text));
+            String system = systemPrompt(user) + "\n\n<context>\n" + context + "\n</context>";
+            return new ChatInput(system, normalize(turns), localChat(user, text, context));
+        });
+        Reply reply = llm.complete(in.system(), in.turns(), LlmClient.Effort.LOW, 4000)
                 .map(t -> new Reply(t, "claude"))
-                .orElseGet(() -> new Reply(localChat(user, message, context), LOCAL));
-        save(userId, "user", message.trim());
-        save(userId, "assistant", reply.content());
+                .orElseGet(() -> new Reply(in.localReply(), LOCAL));
+        writeTx.executeWithoutResult(status -> {
+            save(userId, "user", text);
+            save(userId, "assistant", reply.content());
+        });
         return reply;
     }
 
@@ -233,15 +249,20 @@ public class AiService {
 
     // ---------------------------------------------------------------- workout plan
 
-    public Reply workoutPlan(Member member, String goal, String level, int daysPerWeek, String notes) {
+    /** @param memberId the member the plan is for, or {@code null} for a generic plan */
+    public Reply workoutPlan(Long memberId, String goal, String level, int daysPerWeek, String notes) {
         int days = Math.max(2, Math.min(6, daysPerWeek));
-        String g = goal != null && !goal.isBlank() ? goal : member != null ? member.getGoal() : null;
+        String[] memberGoalAndFacts = memberId == null ? new String[] {null, null} : readTx.execute(status -> {
+            Member member = members.findById(memberId).orElseThrow(() -> BusinessException.notFound("عضو"));
+            return new String[] {member.getGoal(), memberFacts(member)};
+        });
+        String g = goal != null && !goal.isBlank() ? goal : memberGoalAndFacts[0];
         StringBuilder prompt = new StringBuilder("یک برنامه تمرینی هفتگی بنویس.\n");
         prompt.append("هدف: ").append(g == null ? "آمادگی جسمانی عمومی" : g).append("\n");
         prompt.append("سطح: ").append(level == null ? "متوسط" : level).append("\n");
         prompt.append("تعداد جلسات در هفته: ").append(days).append("\n");
-        if (member != null) {
-            prompt.append("اطلاعات عضو:\n").append(memberFacts(member));
+        if (memberGoalAndFacts[1] != null) {
+            prompt.append("اطلاعات عضو:\n").append(memberGoalAndFacts[1]);
         }
         if (notes != null && !notes.isBlank()) {
             prompt.append("ملاحظات: ").append(notes).append("\n");
@@ -258,7 +279,6 @@ public class AiService {
 
     // ---------------------------------------------------------------- retention
 
-    @Transactional(readOnly = true)
     public RetentionMessage retentionMessage(Long memberId) {
         Member m = members.findById(memberId).orElseThrow(() -> BusinessException.notFound("عضو"));
         ChurnService.MemberRisk risk = churn.score(m);
@@ -277,7 +297,7 @@ public class AiService {
                         LOCAL, risk));
     }
 
-    @Transactional
+    /** Not transactional: the SMS provider call must not hold a database connection. */
     public void sendRetentionSms(Long memberId, String message, Long staffId) {
         Member m = members.findById(memberId).orElseThrow(() -> BusinessException.notFound("عضو"));
         if (message == null || message.isBlank() || message.length() > 500) {

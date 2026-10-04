@@ -3,12 +3,12 @@ package ir.clubcore.billing;
 import java.time.Clock;
 
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Paging;
 import ir.clubcore.common.PageResponse;
 import ir.clubcore.member.Member;
 
@@ -48,9 +48,14 @@ public class InvoiceService {
         return invoices.findById(id).orElseThrow(() -> BusinessException.notFound("فاکتور"));
     }
 
+    /** Loads the invoice with a row lock; use before any status transition. */
+    public Invoice lock(Long id) {
+        return invoices.lockById(id).orElseThrow(() -> BusinessException.notFound("فاکتور"));
+    }
+
     public PageResponse<InvoiceDto> search(Long memberId, InvoiceStatus status, int page, int size) {
         return PageResponse.of(invoices.search(memberId, status,
-                PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "id"))), InvoiceDto::of);
+                Paging.of(page, size, 100, Sort.by(Sort.Direction.DESC, "id"))), InvoiceDto::of);
     }
 
     /** Records a successful payment and fires {@link InvoicePaidEvent}. Idempotent per invoice. */
@@ -76,7 +81,7 @@ public class InvoiceService {
         if (method != PaymentMethod.CASH && method != PaymentMethod.POS) {
             throw new BusinessException("روش پرداخت حضوری باید نقد یا کارتخوان باشد");
         }
-        Invoice invoice = get(invoiceId);
+        Invoice invoice = lock(invoiceId);
         Payment p = new Payment();
         p.setInvoice(invoice);
         p.setAmount(invoice.getTotal());
@@ -99,7 +104,7 @@ public class InvoiceService {
 
     @Transactional
     public InvoiceDto cancel(Long id) {
-        Invoice i = get(id);
+        Invoice i = lock(id);
         if (i.getStatus() != InvoiceStatus.UNPAID) {
             throw new BusinessException("فقط فاکتورهای پرداخت‌نشده قابل لغو هستند");
         }

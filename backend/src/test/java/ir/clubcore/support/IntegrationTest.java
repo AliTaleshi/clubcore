@@ -15,7 +15,8 @@ import ir.clubcore.TestcontainersConfiguration;
 /** All integration tests share one Spring context and one PostgreSQL 16 container. */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@SpringBootTest(properties = {"app.bootstrap.seed-demo=false", "app.public-url=http://test.local"})
+@SpringBootTest(properties = {"app.bootstrap.seed-demo=false", "app.public-url=http://test.local",
+        "app.payment.mock-enabled=true", "app.ai.churn-cache-seconds=0"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, TestBeans.class})

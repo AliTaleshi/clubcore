@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ir.clubcore.attendance.AttendanceRepository;
+import ir.clubcore.config.AppProperties;
 import ir.clubcore.member.Member;
 import ir.clubcore.member.MemberRepository;
 import ir.clubcore.membership.Membership;
@@ -37,24 +38,39 @@ public class ChurnService {
     private final MembershipRepository memberships;
     private final AttendanceRepository attendance;
     private final Clock clock;
+    private final long cacheSeconds;
+
+    private record Cached(Instant at, List<MemberRisk> scores) {
+    }
+
+    /** Scoring runs several queries per member and feeds the dashboard, so results are reused for a few minutes. */
+    private volatile Cached cache;
 
     public ChurnService(MemberRepository members, MembershipRepository memberships, AttendanceRepository attendance,
-            Clock clock) {
+            Clock clock, AppProperties props) {
         this.members = members;
         this.memberships = memberships;
         this.attendance = attendance;
         this.clock = clock;
+        this.cacheSeconds = props.ai() == null ? 0 : props.ai().churnCacheSeconds();
     }
 
     /** Scores members who are current or lapsed within 30 days, highest risk first. */
     @Transactional(readOnly = true)
     public List<MemberRisk> scoreAll() {
+        Cached c = cache;
+        Instant now = clock.instant();
+        if (c != null && cacheSeconds > 0 && c.at().plusSeconds(cacheSeconds).isAfter(now)) {
+            return c.scores();
+        }
         LocalDate today = LocalDate.now(clock);
-        return members.findAll().stream().filter(m -> m.getUser().isActive())
+        List<MemberRisk> scores = members.findAllWithUser().stream().filter(m -> m.getUser().isActive())
                 .map(m -> score(m, today))
                 .filter(r -> r != null)
                 .sorted(Comparator.comparingInt(MemberRisk::risk).reversed())
                 .toList();
+        cache = new Cached(now, scores);
+        return scores;
     }
 
     @Transactional(readOnly = true)

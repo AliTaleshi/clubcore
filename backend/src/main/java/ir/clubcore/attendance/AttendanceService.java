@@ -5,12 +5,12 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Paging;
 import ir.clubcore.common.Digits;
 import ir.clubcore.common.PageResponse;
 import ir.clubcore.common.Phones;
@@ -73,6 +73,7 @@ public class AttendanceService {
     @Transactional
     public ScanResult scan(EntryMethod method, String value, Long staffId) {
         Member m = identify(method, value);
+        members.lockById(m.getId());
         var open = repo.findFirstByMemberIdAndCheckOutAtIsNullOrderByIdDesc(m.getId());
         if (open.isPresent()) {
             return checkOut(open.get());
@@ -82,6 +83,8 @@ public class AttendanceService {
 
     @Transactional
     public ScanResult checkIn(Member m, EntryMethod method, Long staffId) {
+        // Row lock: concurrent scans of the same member must not create two visits or lose a session count.
+        members.lockById(m.getId());
         if (!m.getUser().isActive()) {
             throw new BusinessException("حساب این عضو غیرفعال است");
         }
@@ -137,9 +140,10 @@ public class AttendanceService {
         ZoneId zone = clock.getZone();
         LocalDate f = from != null ? from : LocalDate.now(clock).minusDays(30);
         LocalDate t = to != null ? to : LocalDate.now(clock);
+        ir.clubcore.common.DateRange.check(f, t);
         return PageResponse.of(repo.search(memberId, f.atStartOfDay(zone).toInstant(),
                 t.plusDays(1).atStartOfDay(zone).toInstant(),
-                PageRequest.of(page, Math.min(size, 200), Sort.by(Sort.Direction.DESC, "checkInAt"))),
+                Paging.of(page, size, 200, Sort.by(Sort.Direction.DESC, "checkInAt"))),
                 AttendanceDto::of);
     }
 

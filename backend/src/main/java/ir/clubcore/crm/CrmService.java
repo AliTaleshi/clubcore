@@ -6,12 +6,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ir.clubcore.common.BusinessException;
+import ir.clubcore.common.Paging;
 import ir.clubcore.common.Digits;
 import ir.clubcore.common.PageResponse;
 import ir.clubcore.common.Phones;
@@ -21,12 +21,18 @@ import ir.clubcore.member.MemberRequest;
 import ir.clubcore.member.MemberService;
 import ir.clubcore.notification.SmsService;
 import ir.clubcore.setting.SettingService;
+import ir.clubcore.user.UserService;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 @Service
 public class CrmService {
 
-    public record LeadRequest(String fullName, String phone, String source, LeadStatus status, String interest,
-            Long assignedTo, LocalDate followUpDate, String notes) {
+    public record LeadRequest(@NotBlank(message = "نام الزامی است") @Size(max = 120, message = "نام بیش از حد طولانی است") String fullName,
+            @NotBlank(message = "شماره موبایل الزامی است") @Size(max = 20) String phone,
+            @Size(max = 30, message = "منبع بیش از حد طولانی است") String source, LeadStatus status,
+            @Size(max = 200, message = "علاقه‌مندی بیش از حد طولانی است") String interest, Long assignedTo,
+            LocalDate followUpDate, @Size(max = 2000, message = "یادداشت بیش از حد طولانی است") String notes) {
     }
 
     private final LeadRepository leads;
@@ -36,10 +42,12 @@ public class CrmService {
     private final MemberService members;
     private final SmsService sms;
     private final SettingService settings;
+    private final UserService users;
     private final Clock clock;
 
     public CrmService(LeadRepository leads, CrmActivityRepository activities, CampaignRepository campaigns,
-            SegmentService segments, MemberService members, SmsService sms, SettingService settings, Clock clock) {
+            SegmentService segments, MemberService members, SmsService sms, SettingService settings, UserService users,
+            Clock clock) {
         this.leads = leads;
         this.activities = activities;
         this.campaigns = campaigns;
@@ -47,6 +55,7 @@ public class CrmService {
         this.members = members;
         this.sms = sms;
         this.settings = settings;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -55,7 +64,7 @@ public class CrmService {
     public PageResponse<Lead> search(LeadStatus status, String q, int page, int size) {
         String query = q == null || q.isBlank() ? null : Digits.toLatin(q.trim());
         return PageResponse.of(leads.search(status, query,
-                PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "id"))), l -> l);
+                Paging.of(page, size, 100, Sort.by(Sort.Direction.DESC, "id"))), l -> l);
     }
 
     @Transactional
@@ -153,8 +162,10 @@ public class CrmService {
         return segments.resolve(segment).stream().map(MemberDto::of).toList();
     }
 
-    /** Sends an SMS to every member in the segment; {name} and {gym} placeholders are substituted. */
-    @Transactional
+    /**
+     * Sends an SMS to every member in the segment; {name} and {gym} placeholders are substituted. Not transactional:
+     * each SMS and its activity log are committed on their own, so a long campaign never holds a connection.
+     */
     public Campaign sendCampaign(String title, Segment segment, String message, Long userId) {
         List<Member> audience = segments.resolve(segment);
         String gym = settings.get("gym.name", "باشگاه");
@@ -194,6 +205,9 @@ public class CrmService {
             l.setStatus(req.status());
         }
         l.setInterest(req.interest());
+        if (req.assignedTo() != null && !users.get(req.assignedTo()).getRole().isStaff()) {
+            throw new BusinessException("مسئول پیگیری باید از کارکنان باشد");
+        }
         l.setAssignedTo(req.assignedTo());
         l.setFollowUpDate(req.followUpDate());
         l.setNotes(req.notes());

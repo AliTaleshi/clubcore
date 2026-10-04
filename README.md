@@ -46,7 +46,9 @@ printed in the backend log: `docker compose logs backend | grep "MOCK SMS"`).
 
 All settings are environment variables (see [.env.example](.env.example)):
 
-- **Payments** — `ZARINPAL_MERCHANT_ID`, `ZARINPAL_SANDBOX`, `ZIBAL_MERCHANT`. `APP_PUBLIC_URL` must be the URL users
+- **Payments** — `ZARINPAL_MERCHANT_ID`, `ZARINPAL_SANDBOX`, `ZIBAL_MERCHANT`. `PAYMENT_MOCK_ENABLED=true` adds the
+  mock gateway, which approves payments without charging anyone — **set it to `false` in production** (the default
+  when unset). `APP_PUBLIC_URL` must be the URL users
   reach the site on, because gateways redirect back to `APP_PUBLIC_URL/api/payments/callback/{gateway}`.
 - **SMS** — `SMS_PROVIDER=kavenegar` with `KAVENEGAR_API_KEY` / `KAVENEGAR_SENDER`, or `mock`.
 - **AI** — `ANTHROPIC_API_KEY` enables Claude (default model `claude-opus-5`, override with `AI_MODEL`).
@@ -62,7 +64,7 @@ docker run -d --name clubcore-devdb -p 5432:5432 \
   -e POSTGRES_DB=clubcore -e POSTGRES_USER=clubcore -e POSTGRES_PASSWORD=clubcore postgres:16-alpine
 
 # Backend (http://localhost:8080, API docs at /api/docs)
-cd backend && SEED_DEMO=true APP_PUBLIC_URL=http://localhost:5173 ./mvnw spring-boot:run
+cd backend && SEED_DEMO=true PAYMENT_MOCK_ENABLED=true APP_PUBLIC_URL=http://localhost:5173 ./mvnw spring-boot:run
 
 # Frontend (http://localhost:5173, proxies /api to :8080)
 cd frontend && npm install && npm run dev
@@ -72,8 +74,8 @@ cd frontend && npm install && npm run dev
 
 | Suite | Command | Notes |
 |---|---|---|
-| Backend unit (27) | `cd backend && ./mvnw test` | validators, churn model, QR tokens, accounting rules, Zarinpal/Zibal clients, loyalty tiers, AI fallbacks |
-| Backend integration (42) | `cd backend && ./mvnw verify` | Testcontainers PostgreSQL 16 + MockMvc: auth/OTP/refresh, RBAC, memberships, attendance, payments, accounting, loyalty, CRM, AI (fake LLM) |
+| Backend unit (29) | `cd backend && ./mvnw test` | validators, churn model, QR tokens, accounting rules, Zarinpal/Zibal clients, gateway registry, loyalty tiers, AI fallbacks |
+| Backend integration (54) | `cd backend && ./mvnw verify` | Testcontainers PostgreSQL 16 + MockMvc: auth/OTP/refresh, RBAC, memberships, attendance, payments, accounting, loyalty, CRM, AI (fake LLM), concurrency (parallel check-ins, payments, redemptions) |
 | Frontend (19) | `cd frontend && npm test` | Vitest + Testing Library + MSW |
 | End-to-end | see below | Playwright against the full Docker Compose stack |
 

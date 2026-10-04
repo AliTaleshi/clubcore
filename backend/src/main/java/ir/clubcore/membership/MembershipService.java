@@ -18,6 +18,7 @@ import ir.clubcore.billing.InvoiceService;
 import ir.clubcore.common.BusinessException;
 import ir.clubcore.loyalty.LoyaltyService;
 import ir.clubcore.member.Member;
+import ir.clubcore.member.MemberRepository;
 import ir.clubcore.notification.NotificationService;
 import ir.clubcore.plan.Plan;
 import ir.clubcore.plan.PlanRepository;
@@ -39,15 +40,17 @@ public class MembershipService {
     private final InvoiceService invoices;
     private final LoyaltyService loyalty;
     private final NotificationService notifications;
+    private final MemberRepository members;
     private final Clock clock;
 
     public MembershipService(MembershipRepository repo, PlanRepository plans, InvoiceService invoices,
-            LoyaltyService loyalty, NotificationService notifications, Clock clock) {
+            LoyaltyService loyalty, NotificationService notifications, MemberRepository members, Clock clock) {
         this.repo = repo;
         this.plans = plans;
         this.invoices = invoices;
         this.loyalty = loyalty;
         this.notifications = notifications;
+        this.members = members;
         this.clock = clock;
     }
 
@@ -74,6 +77,7 @@ public class MembershipService {
      */
     @Transactional
     public PurchaseResult purchase(Member member, Long planId, LocalDate requestedStart, String discountCode) {
+        members.lockById(member.getId());
         Plan plan = activePlan(planId);
         LocalDate today = LocalDate.now(clock);
         if (requestedStart != null && requestedStart.isBefore(today)) {
@@ -122,7 +126,8 @@ public class MembershipService {
 
     /**
      * Activation stacks renewals: if the member still has a current membership, the new one starts the day after it
-     * ends.
+     * ends. A session-based membership whose sessions are used up no longer counts and is expired right away, so the
+     * renewal starts immediately instead of after the old end date.
      */
     void activate(Membership ms) {
         if (ms.getStatus() != MembershipStatus.PENDING_PAYMENT) {
@@ -131,7 +136,14 @@ public class MembershipService {
         LocalDate today = LocalDate.now(clock);
         LocalDate start = ms.getStartDate().isBefore(today) ? today : ms.getStartDate();
         for (Membership other : repo.findByMemberIdAndStatusIn(ms.getMember().getId(), CURRENT)) {
-            if (!other.getId().equals(ms.getId()) && !other.getEndDate().isBefore(start)) {
+            if (other.getId().equals(ms.getId())) {
+                continue;
+            }
+            if (other.getStatus() == MembershipStatus.ACTIVE && !other.hasSessionsLeft()) {
+                other.setStatus(MembershipStatus.EXPIRED);
+                continue;
+            }
+            if (!other.getEndDate().isBefore(start)) {
                 start = other.getEndDate().plusDays(1);
             }
         }
@@ -154,6 +166,12 @@ public class MembershipService {
         }
         if (ms.getEndDate().isBefore(today)) {
             throw new BusinessException("این اشتراک به پایان رسیده است");
+        }
+        if (ms.getStartDate().isAfter(today)) {
+            throw new BusinessException("اشتراکی که هنوز شروع نشده قابل فریز نیست");
+        }
+        if (!ms.hasSessionsLeft()) {
+            throw new BusinessException("جلسات این اشتراک تمام شده است");
         }
         ms.setStatus(MembershipStatus.FROZEN);
         ms.setFrozenSince(today);
